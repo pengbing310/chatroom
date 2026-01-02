@@ -424,11 +424,12 @@
         @media (max-width: 768px) {
             .container {
                 flex-direction: column;
+                position: relative;
             }
             
             .sidebar {
                 width: 100%;
-                height: auto;
+                height: 50vh;
                 max-height: 50vh;
                 border-right: none;
                 border-bottom: 1px solid var(--border-color);
@@ -459,11 +460,12 @@
             
             .chat-area {
                 height: 100vh;
-                padding-top: 0;
+                width: 100vw;
+                position: relative;
             }
             
             .chat-header {
-                padding: 12px 15px;
+                padding: 12px 15px 12px 60px;
                 position: sticky;
                 top: 0;
                 z-index: 5;
@@ -519,6 +521,12 @@
                 font-size: 16px;
                 padding: 10px 15px;
             }
+            
+            /* 修复消息容器高度问题 */
+            .messages-container {
+                display: block;
+                height: calc(100vh - 120px);
+            }
         }
         
         /* 非常小的屏幕 */
@@ -558,11 +566,13 @@
             .messages-container {
                 padding-bottom: 70px;
                 padding-top: 60px;
+                height: calc(100vh - 110px) !important;
             }
             
             .empty-chat {
                 padding-top: 60px;
                 padding-bottom: 70px;
+                height: calc(100vh - 130px);
             }
             
             .empty-chat i {
@@ -596,10 +606,6 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
-            }
-            
-            .chat-header {
-                padding-left: 60px;
             }
         }
         
@@ -671,7 +677,8 @@
             </div>
             
             <div class="messages-container" id="messagesContainer">
-                <div class="loading" id="loadingSpinner">
+                <!-- 初始加载状态 -->
+                <div class="loading" id="initialLoading">
                     <div class="spinner"></div>
                 </div>
             </div>
@@ -696,9 +703,9 @@
         // ===================== 配置区域 =====================
         // 请替换为您的 LeanCloud 配置
         const LEANCLOUD_CONFIG = {
-            appId: 'x1C7t7inH9TDv1Ku9msDyOWi-MdYXbMMI',      // 替换为您的 App ID
-            appKey: 'KLfByl3kEn1BSfhqgu3WWjDk',   // 替换为您的 App Key
-            serverURL: ''  // 通常留空，除非使用自定义域名
+            appId: 'x1C7t7inH9TDv1Ku9msDyOWi-MdYXbMMI',
+            appKey: 'KLfByl3kEn1BSfhqgu3WWjDk',
+            serverURL: ''
         };
         
         // 语言配置
@@ -747,7 +754,7 @@
         };
         
         // 消息轮询间隔（毫秒）
-        const POLL_INTERVAL = 3000; // 3秒
+        const POLL_INTERVAL = 3000;
         
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', async function() {
@@ -773,10 +780,6 @@
             
             // 初始化 LeanCloud
             await initializeLeanCloud();
-            
-            // 调整输入框位置
-            adjustInputPositionForMobile();
-            window.addEventListener('resize', adjustInputPositionForMobile);
         });
         
         // 初始化 LeanCloud
@@ -786,8 +789,7 @@
                 console.log('开始初始化 LeanCloud...');
                 
                 // 检查配置
-                if (!LEANCLOUD_CONFIG.appId || LEANCLOUD_CONFIG.appId.includes('YOUR_') || 
-                    !LEANCLOUD_CONFIG.appKey || LEANCLOUD_CONFIG.appKey.includes('YOUR_')) {
+                if (!LEANCLOUD_CONFIG.appId || !LEANCLOUD_CONFIG.appKey) {
                     console.log('配置未设置，请更新 LEANCLOUD_CONFIG');
                     showConfigurationError();
                     return;
@@ -902,18 +904,18 @@
                 const messages = await query.find();
                 console.log(`成功加载 ${messages.length} 条历史消息`);
                 
-                const messagesContainer = document.getElementById('messagesContainer');
+                // 移除初始加载动画
+                const initialLoading = document.getElementById('initialLoading');
+                if (initialLoading) {
+                    initialLoading.style.display = 'none';
+                }
                 
-                // 移除加载动画
-                removeLoadingSpinner();
+                const messagesContainer = document.getElementById('messagesContainer');
                 
                 if (messages.length === 0) {
                     showEmptyChatState();
                     return;
                 }
-                
-                // 清空容器
-                messagesContainer.innerHTML = '';
                 
                 // 按时间正序显示
                 messages.reverse().forEach(message => {
@@ -936,16 +938,12 @@
                 
             } catch (error) {
                 console.error('加载历史消息失败:', error);
-                removeLoadingSpinner();
+                // 移除初始加载动画
+                const initialLoading = document.getElementById('initialLoading');
+                if (initialLoading) {
+                    initialLoading.style.display = 'none';
+                }
                 showEmptyChatState();
-            }
-        }
-        
-        // 移除加载动画
-        function removeLoadingSpinner() {
-            const loadingSpinner = document.getElementById('loadingSpinner');
-            if (loadingSpinner) {
-                loadingSpinner.style.display = 'none';
             }
         }
         
@@ -975,9 +973,6 @@
                 
                 console.log(`消息发送成功，ID: ${savedMessage.id}`);
                 
-                // 确保加载动画已移除
-                removeLoadingSpinner();
-                
                 // 立即显示消息（不用等轮询）
                 addMessageToChat({
                     id: savedMessage.id,
@@ -993,9 +988,6 @@
                 // 清空输入框
                 messageInput.value = '';
                 messageInput.focus();
-                
-                // 隐藏空聊天状态
-                hideEmptyChatState();
                 
             } catch (error) {
                 console.error('发送消息失败:', error);
@@ -1031,9 +1023,6 @@
                 if (newMessages.length > 0) {
                     console.log(`发现 ${newMessages.length} 条新消息`);
                     
-                    // 确保加载动画已移除
-                    removeLoadingSpinner();
-                    
                     newMessages.forEach(message => {
                         // 避免显示自己刚发的消息（已经即时显示了）
                         if (message.get('userId') !== currentUser.id) {
@@ -1052,9 +1041,6 @@
                     
                     // 更新最后消息时间
                     lastMessageTime = newMessages[newMessages.length - 1].createdAt;
-                    
-                    // 隐藏空聊天状态
-                    hideEmptyChatState();
                 }
                 
             } catch (error) {
@@ -1066,12 +1052,16 @@
         function addMessageToChat(message, scrollToBottom = true) {
             const messagesContainer = document.getElementById('messagesContainer');
             
-            // 如果容器还在显示加载状态，清除加载状态
-            removeLoadingSpinner();
-            
-            // 确保容器不是空的
-            if (messagesContainer.innerHTML.includes('empty-chat')) {
+            // 如果容器还在显示初始加载状态，清除它
+            const initialLoading = document.getElementById('initialLoading');
+            if (initialLoading && initialLoading.style.display !== 'none') {
                 messagesContainer.innerHTML = '';
+            }
+            
+            // 如果显示空状态，清除它
+            const emptyChatState = document.getElementById('emptyChatState');
+            if (emptyChatState) {
+                emptyChatState.remove();
             }
             
             // 创建消息元素
@@ -1111,7 +1101,10 @@
         // 显示配置错误
         function showConfigurationError() {
             const messagesContainer = document.getElementById('messagesContainer');
-            removeLoadingSpinner();
+            const initialLoading = document.getElementById('initialLoading');
+            if (initialLoading) {
+                initialLoading.style.display = 'none';
+            }
             messagesContainer.innerHTML = `
                 <div class="empty-chat">
                     <i class="fas fa-cog"></i>
@@ -1138,7 +1131,10 @@ const LEANCLOUD_CONFIG = {
         // 显示连接错误
         function showConnectionError(errorMsg) {
             const messagesContainer = document.getElementById('messagesContainer');
-            removeLoadingSpinner();
+            const initialLoading = document.getElementById('initialLoading');
+            if (initialLoading) {
+                initialLoading.style.display = 'none';
+            }
             messagesContainer.innerHTML = `
                 <div class="empty-chat">
                     <i class="fas fa-exclamation-triangle"></i>
@@ -1157,18 +1153,13 @@ const LEANCLOUD_CONFIG = {
             `;
         }
         
-        // 隐藏空聊天状态
-        function hideEmptyChatState() {
-            const emptyChatState = document.getElementById('emptyChatState');
-            if (emptyChatState) {
-                emptyChatState.style.display = 'none';
-            }
-        }
-        
         // 显示空聊天状态
         function showEmptyChatState() {
             const messagesContainer = document.getElementById('messagesContainer');
-            removeLoadingSpinner();
+            const initialLoading = document.getElementById('initialLoading');
+            if (initialLoading) {
+                initialLoading.style.display = 'none';
+            }
             
             // 如果已经显示空状态，不需要重新设置
             if (messagesContainer.innerHTML.includes('empty-chat')) {
@@ -1227,16 +1218,6 @@ const LEANCLOUD_CONFIG = {
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             sidebar.classList.toggle('active');
-        }
-        
-        // 调整移动端输入框位置
-        function adjustInputPositionForMobile() {
-            if (window.innerWidth <= 768) {
-                const messagesContainer = document.querySelector('.messages-container');
-                if (messagesContainer) {
-                    messagesContainer.style.paddingBottom = '80px';
-                }
-            }
         }
         
         // 辅助函数：转义HTML
