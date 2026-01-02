@@ -249,6 +249,34 @@
             color: var(--danger-color);
         }
         
+        .config-panel {
+            background-color: #f8f9fa;
+            padding: 20px;
+            margin: 20px;
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+        
+        .config-input {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 14px;
+        }
+        
+        .config-btn {
+            padding: 10px 20px;
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
         /* 移动端适配 */
         @media (max-width: 768px) {
             #app {
@@ -310,8 +338,8 @@
             <div class="user-info">
                 <div class="user-avatar" id="userAvatar">?</div>
                 <div>
-                    <div id="userName">加载中...</div>
-                    <div id="userId" style="font-size: 12px; color: #666;">ID: ...</div>
+                    <div id="userName">未连接</div>
+                    <div id="userId" style="font-size: 12px; color: #666;">ID: 等待配置</div>
                 </div>
             </div>
             
@@ -324,8 +352,7 @@
                 <h3>在线用户 (<span id="onlineCount">0</span>)</h3>
                 <ul class="user-list" id="userList">
                     <div class="loading" id="userListLoading">
-                        <div class="spinner"></div>
-                        <div>加载用户列表...</div>
+                        <div>请先配置LeanCloud</div>
                     </div>
                 </ul>
             </div>
@@ -337,19 +364,52 @@
                 <h2>公共聊天室</h2>
                 <div class="status">
                     <span class="status-dot" id="statusDot"></span>
-                    <span id="statusText">连接中...</span>
+                    <span id="statusText">未配置</span>
                 </div>
             </div>
             
             <div class="messages" id="messages">
-                <div class="loading" id="messagesLoading">
-                    <div class="spinner"></div>
-                    <div>加载消息...</div>
+                <div class="config-panel" id="configPanel">
+                    <h3>需要配置LeanCloud</h3>
+                    <p>请按以下步骤操作：</p>
+                    <ol>
+                        <li>访问 <a href="https://console.leancloud.app/" target="_blank">LeanCloud控制台</a></li>
+                        <li>创建一个应用（如果还没有）</li>
+                        <li>进入应用设置，找到「存储」-「服务设置」</li>
+                        <li>复制 App ID 和 App Key</li>
+                        <li>粘贴到下面的输入框中</li>
+                    </ol>
+                    
+                    <div>
+                        <label>App ID:</label>
+                        <input type="text" id="appIdInput" class="config-input" placeholder="请输入App ID">
+                    </div>
+                    
+                    <div>
+                        <label>App Key:</label>
+                        <input type="text" id="appKeyInput" class="config-input" placeholder="请输入App Key">
+                    </div>
+                    
+                    <div>
+                        <label>Server URL (可选):</label>
+                        <input type="text" id="serverURLInput" class="config-input" placeholder="例如: https://xxx.lc-cn-n1-shared.com">
+                    </div>
+                    
+                    <button class="config-btn" id="saveConfigBtn">保存配置</button>
+                    
+                    <div style="margin-top: 20px; font-size: 12px; color: #666;">
+                        <p>提示：您需要先在LeanCloud控制台创建Class（表）：</p>
+                        <ul>
+                            <li>创建一个名为 "ChatMessage" 的Class</li>
+                            <li>添加列：content (String), userId (String), username (String)</li>
+                            <li>在「设置」-「安全中心」中添加您的域名到Web安全域名</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             
             <div class="input-area">
-                <input type="text" id="messageInput" placeholder="输入消息..." maxlength="500" disabled>
+                <input type="text" id="messageInput" placeholder="请先配置LeanCloud" maxlength="500" disabled>
                 <button id="sendButton" disabled>
                     <i class="fas fa-paper-plane"></i>
                     <span>发送</span>
@@ -364,11 +424,11 @@
     </div>
 
     <script>
-        // 配置
-        const config = {
-            appId: 'x1C7t7inH9TDv1Ku9msDyOWi-MdYXbMMI',
-            appKey: 'KLfByl3kEn1BSfhqgu3WWjDk',
-            serverURL: 'https://x1c7t7in.lc-cn-n1-shared.com'  // 添加服务器URL
+        // 默认配置
+        const defaultConfig = {
+            appId: '',
+            appKey: '',
+            serverURL: ''
         };
         
         // 当前用户
@@ -381,15 +441,16 @@
         // 最后消息时间
         let lastMessageTime = null;
         
-        // 初始化
+        // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('页面加载完成，开始初始化...');
+            console.log('页面加载完成');
             
             // 绑定事件
             document.getElementById('mobileToggle').addEventListener('click', function() {
                 document.getElementById('sidebar').classList.toggle('active');
             });
             
+            document.getElementById('saveConfigBtn').addEventListener('click', saveConfig);
             document.getElementById('sendButton').addEventListener('click', sendMessage);
             document.getElementById('messageInput').addEventListener('keypress', function(e) {
                 if (e.key === 'Enter') {
@@ -397,31 +458,85 @@
                 }
             });
             
-            // 启动应用
-            initApp();
+            // 尝试加载保存的配置
+            loadSavedConfig();
         });
         
+        // 加载保存的配置
+        function loadSavedConfig() {
+            const savedConfig = localStorage.getItem('leancloudConfig');
+            if (savedConfig) {
+                try {
+                    const config = JSON.parse(savedConfig);
+                    document.getElementById('appIdInput').value = config.appId || '';
+                    document.getElementById('appKeyInput').value = config.appKey || '';
+                    document.getElementById('serverURLInput').value = config.serverURL || '';
+                    
+                    // 如果有配置，尝试连接
+                    if (config.appId && config.appKey) {
+                        setTimeout(() => {
+                            initApp(config);
+                        }, 500);
+                    }
+                } catch (error) {
+                    console.error('加载配置失败:', error);
+                }
+            }
+        }
+        
+        // 保存配置
+        function saveConfig() {
+            const config = {
+                appId: document.getElementById('appIdInput').value.trim(),
+                appKey: document.getElementById('appKeyInput').value.trim(),
+                serverURL: document.getElementById('serverURLInput').value.trim()
+            };
+            
+            if (!config.appId || !config.appKey) {
+                alert('请填写App ID和App Key');
+                return;
+            }
+            
+            // 保存到本地存储
+            localStorage.setItem('leancloudConfig', JSON.stringify(config));
+            
+            // 初始化应用
+            initApp(config);
+        }
+        
         // 初始化应用
-        async function initApp() {
+        async function initApp(config) {
             try {
-                updateStatus('正在初始化...');
+                updateStatus('正在连接...');
+                
+                // 显示配置面板
+                document.getElementById('configPanel').style.display = 'none';
+                
+                // 显示加载状态
+                const messagesContainer = document.getElementById('messages');
+                messagesContainer.innerHTML = `
+                    <div class="loading" id="messagesLoading">
+                        <div class="spinner"></div>
+                        <div>正在连接到LeanCloud...</div>
+                    </div>
+                `;
                 
                 // 初始化LeanCloud
                 AV.init({
                     appId: config.appId,
                     appKey: config.appKey,
-                    serverURL: config.serverURL
+                    serverURL: config.serverURL || undefined
                 });
                 
-                console.log('LeanCloud初始化成功');
+                console.log('LeanCloud初始化完成');
                 
                 // 初始化用户
                 await initUser();
                 
-                // 测试连接
-                const connected = await testConnection();
+                // 测试连接 - 使用更简单的方法
+                const connected = await testSimpleConnection();
                 if (!connected) {
-                    throw new Error('无法连接到LeanCloud服务器');
+                    throw new Error('无法连接到LeanCloud，请检查配置');
                 }
                 
                 updateStatus('已连接');
@@ -429,6 +544,7 @@
                 // 启用输入框
                 document.getElementById('messageInput').disabled = false;
                 document.getElementById('sendButton').disabled = false;
+                document.getElementById('messageInput').placeholder = "输入消息...";
                 document.getElementById('messageInput').focus();
                 
                 // 加载数据
@@ -440,7 +556,7 @@
             } catch (error) {
                 console.error('初始化失败:', error);
                 updateStatus('连接失败');
-                showError('初始化失败: ' + error.message);
+                showError('初始化失败: ' + error.message, config);
             }
         }
         
@@ -478,42 +594,38 @@
             });
         }
         
-        // 测试连接
-        async function testConnection() {
+        // 简单连接测试
+        async function testSimpleConnection() {
             try {
                 console.log('测试LeanCloud连接...');
                 
-                // 尝试简单的查询
-                const TestObject = AV.Object.extend('Test');
-                const query = new AV.Query('Test');
+                // 尝试直接创建一个ChatMessage对象来测试
+                const ChatMessage = AV.Object.extend('ChatMessage');
+                const testMessage = new ChatMessage();
+                testMessage.set('content', '连接测试');
+                testMessage.set('userId', 'test_user');
+                testMessage.set('username', '测试用户');
+                
+                // 注意：这里我们不保存，只是测试是否能创建对象
+                // 如果表不存在，LeanCloud会自动创建
+                
+                // 改为测试查询权限
+                const query = new AV.Query('ChatMessage');
                 query.limit(1);
+                const results = await query.find();
+                console.log('连接测试成功，查询到数据:', results.length);
                 
-                await query.find();
-                
-                console.log('连接测试成功');
                 return true;
                 
             } catch (error) {
-                console.warn('连接测试失败，尝试创建测试对象:', error.message);
+                console.error('连接测试失败:', error.message);
                 
-                try {
-                    // 尝试创建对象
-                    const TestObject = AV.Object.extend('Test');
-                    const testObj = new TestObject();
-                    testObj.set('test', 'test_' + Date.now());
-                    
-                    const saved = await testObj.save();
-                    console.log('创建测试对象成功:', saved.id);
-                    
-                    // 清理
-                    await saved.destroy();
-                    console.log('清理测试对象完成');
-                    
-                    return true;
-                } catch (createError) {
-                    console.error('创建测试对象失败:', createError);
-                    return false;
+                // 检查是否是权限问题
+                if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+                    alert('认证失败！请检查：\n1. App ID 和 App Key 是否正确\n2. 是否在LeanCloud控制台添加了Web安全域名\n\n当前URL: ' + window.location.origin);
                 }
+                
+                return false;
             }
         }
         
@@ -547,7 +659,8 @@
                 console.log('获取到消息数量:', messages.length);
                 
                 // 隐藏加载状态
-                document.getElementById('messagesLoading').style.display = 'none';
+                const messagesContainer = document.getElementById('messages');
+                messagesContainer.innerHTML = '';
                 
                 if (messages.length === 0) {
                     showEmptyMessages();
@@ -559,9 +672,6 @@
                 lastMessageTime = messages[0].createdAt;
                 
                 // 显示消息（按时间正序）
-                const messagesContainer = document.getElementById('messages');
-                messagesContainer.innerHTML = '';
-                
                 // 反转数组，按时间正序显示
                 messages.reverse().forEach(msg => {
                     addMessageToUI(msg, false);
@@ -574,8 +684,16 @@
                 
             } catch (error) {
                 console.error('加载消息失败:', error);
-                document.getElementById('messagesLoading').innerHTML = 
-                    '<div class="error">加载消息失败，请刷新页面</div>';
+                const messagesContainer = document.getElementById('messages');
+                messagesContainer.innerHTML = `
+                    <div class="error">
+                        <p>加载消息失败: ${error.message}</p>
+                        <p>可能是ChatMessage表不存在或没有权限</p>
+                        <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            重新加载
+                        </button>
+                    </div>
+                `;
             }
         }
         
@@ -587,7 +705,7 @@
                 // 从消息中提取用户
                 const query = new AV.Query('ChatMessage');
                 query.descending('createdAt');
-                query.limit(100); // 获取更多消息以提取用户
+                query.limit(100);
                 
                 const messages = await query.find();
                 console.log('获取消息用于提取用户:', messages.length);
@@ -614,7 +732,7 @@
             } catch (error) {
                 console.error('加载用户列表失败:', error);
                 document.getElementById('userListLoading').innerHTML = 
-                    '<div class="error">加载用户列表失败</div>';
+                    '<div>加载用户列表失败</div>';
             }
         }
         
@@ -622,9 +740,6 @@
         function updateUserListUI(users) {
             const userList = document.getElementById('userList');
             const onlineCount = document.getElementById('onlineCount');
-            
-            // 隐藏加载状态
-            document.getElementById('userListLoading').style.display = 'none';
             
             // 更新在线人数
             onlineCount.textContent = Object.keys(users).length;
@@ -682,7 +797,7 @@
                 
             } catch (error) {
                 console.error('发送消息失败:', error);
-                alert('发送失败，请重试');
+                alert('发送失败: ' + error.message);
             } finally {
                 // 重新启用发送按钮
                 document.getElementById('sendButton').disabled = false;
@@ -697,12 +812,6 @@
             const emptyState = document.getElementById('emptyMessagesState');
             if (emptyState) {
                 emptyState.remove();
-            }
-            
-            // 移除加载状态（如果还在）
-            const loadingState = document.getElementById('messagesLoading');
-            if (loadingState && loadingState.style.display !== 'none') {
-                loadingState.style.display = 'none';
             }
             
             const messageDiv = document.createElement('div');
@@ -752,7 +861,6 @@
             // 收集现有用户
             userList.querySelectorAll('li').forEach(li => {
                 const text = li.textContent.replace(' (你)', '');
-                // 这里我们不知道用户ID，所以用用户名作为键
                 users[text] = text;
             });
             
@@ -806,16 +914,31 @@
         }
         
         // 显示错误
-        function showError(message) {
+        function showError(message, config) {
             const messagesContainer = document.getElementById('messages');
-            document.getElementById('messagesLoading').style.display = 'none';
             
             messagesContainer.innerHTML = `
-                <div class="error">
-                    <h3>出错了</h3>
+                <div class="config-panel">
+                    <h3 style="color: var(--danger-color);">连接失败</h3>
                     <p>${message}</p>
-                    <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        重新加载页面
+                    
+                    <h4>当前配置：</h4>
+                    <div style="background: #fff; padding: 10px; border-radius: 4px; font-family: monospace; margin: 10px 0;">
+                        App ID: ${config.appId}<br>
+                        App Key: ${config.appKey}<br>
+                        Server URL: ${config.serverURL || '未设置'}
+                    </div>
+                    
+                    <h4>请检查：</h4>
+                    <ol>
+                        <li>App ID 和 App Key 是否正确</li>
+                        <li>在LeanCloud控制台是否创建了 "ChatMessage" 表</li>
+                        <li>在「设置」-「安全中心」中是否添加了Web安全域名</li>
+                        <li>当前URL: ${window.location.origin}</li>
+                    </ol>
+                    
+                    <button class="config-btn" onclick="document.getElementById('configPanel').style.display = 'block'; this.parentElement.remove()">
+                        重新配置
                     </button>
                 </div>
             `;
