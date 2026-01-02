@@ -238,8 +238,6 @@
             padding: 20px;
             background-color: #fafafa;
             -webkit-overflow-scrolling: touch;
-            display: flex;
-            flex-direction: column;
         }
         
         .message {
@@ -673,7 +671,7 @@
             </div>
             
             <div class="messages-container" id="messagesContainer">
-                <div class="loading">
+                <div class="loading" id="loadingSpinner">
                     <div class="spinner"></div>
                 </div>
             </div>
@@ -905,14 +903,17 @@
                 console.log(`成功加载 ${messages.length} 条历史消息`);
                 
                 const messagesContainer = document.getElementById('messagesContainer');
-                messagesContainer.innerHTML = '';
+                
+                // 移除加载动画
+                removeLoadingSpinner();
                 
                 if (messages.length === 0) {
                     showEmptyChatState();
                     return;
                 }
                 
-                hideEmptyChatState();
+                // 清空容器
+                messagesContainer.innerHTML = '';
                 
                 // 按时间正序显示
                 messages.reverse().forEach(message => {
@@ -935,7 +936,16 @@
                 
             } catch (error) {
                 console.error('加载历史消息失败:', error);
+                removeLoadingSpinner();
                 showEmptyChatState();
+            }
+        }
+        
+        // 移除加载动画
+        function removeLoadingSpinner() {
+            const loadingSpinner = document.getElementById('loadingSpinner');
+            if (loadingSpinner) {
+                loadingSpinner.style.display = 'none';
             }
         }
         
@@ -964,6 +974,9 @@
                 const savedMessage = await message.save();
                 
                 console.log(`消息发送成功，ID: ${savedMessage.id}`);
+                
+                // 确保加载动画已移除
+                removeLoadingSpinner();
                 
                 // 立即显示消息（不用等轮询）
                 addMessageToChat({
@@ -1018,6 +1031,9 @@
                 if (newMessages.length > 0) {
                     console.log(`发现 ${newMessages.length} 条新消息`);
                     
+                    // 确保加载动画已移除
+                    removeLoadingSpinner();
+                    
                     newMessages.forEach(message => {
                         // 避免显示自己刚发的消息（已经即时显示了）
                         if (message.get('userId') !== currentUser.id) {
@@ -1051,9 +1067,11 @@
             const messagesContainer = document.getElementById('messagesContainer');
             
             // 如果容器还在显示加载状态，清除加载状态
-            if (messagesContainer.querySelector('.loading')) {
+            removeLoadingSpinner();
+            
+            // 确保容器不是空的
+            if (messagesContainer.innerHTML.includes('empty-chat')) {
                 messagesContainer.innerHTML = '';
-                hideEmptyChatState();
             }
             
             // 创建消息元素
@@ -1093,6 +1111,7 @@
         // 显示配置错误
         function showConfigurationError() {
             const messagesContainer = document.getElementById('messagesContainer');
+            removeLoadingSpinner();
             messagesContainer.innerHTML = `
                 <div class="empty-chat">
                     <i class="fas fa-cog"></i>
@@ -1119,6 +1138,7 @@ const LEANCLOUD_CONFIG = {
         // 显示连接错误
         function showConnectionError(errorMsg) {
             const messagesContainer = document.getElementById('messagesContainer');
+            removeLoadingSpinner();
             messagesContainer.innerHTML = `
                 <div class="empty-chat">
                     <i class="fas fa-exclamation-triangle"></i>
@@ -1148,8 +1168,11 @@ const LEANCLOUD_CONFIG = {
         // 显示空聊天状态
         function showEmptyChatState() {
             const messagesContainer = document.getElementById('messagesContainer');
-            if (messagesContainer.querySelector('.loading')) {
-                messagesContainer.innerHTML = '';
+            removeLoadingSpinner();
+            
+            // 如果已经显示空状态，不需要重新设置
+            if (messagesContainer.innerHTML.includes('empty-chat')) {
+                return;
             }
             
             messagesContainer.innerHTML = `
