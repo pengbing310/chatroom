@@ -3,1447 +3,351 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>实时匿名聊天室</title>
+    <title>匿名聊天室 - 调试版</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- LeanCloud SDK -->
     <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.13.2/dist/av-min.js"></script>
-    <!-- 实时通信插件 -->
-    <script src="https://cdn.jsdelivr.net/npm/leancloud-realtime@5.0.0-rc.8/plugins/typed-messages/dist/typed-messages.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/leancloud-realtime@5.0.0-rc.8/plugins/live-query/dist/live-query.min.js"></script>
     <style>
-        /* 全局样式 */
-        :root {
-            --primary-color: #3498db;
-            --secondary-color: #2ecc71;
-            --danger-color: #e74c3c;
-            --light-color: #ecf0f1;
-            --dark-color: #2c3e50;
-            --border-color: #bdc3c7;
-            --user-color: #9b59b6;
-        }
+        /* 简化样式，专注于功能 */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: Arial; font-size: 18px; background: white; color: #333; }
         
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        .container { display: flex; height: 100vh; }
+        .sidebar { width: 250px; background: #f8f9fa; border-right: 1px solid #ddd; padding: 20px; }
+        .chat-area { flex: 1; display: flex; flex-direction: column; }
+        .messages { flex: 1; padding: 20px; overflow-y: auto; background: #fafafa; }
+        .input-area { padding: 15px; border-top: 1px solid #ddd; display: flex; gap: 10px; }
+        input { flex: 1; padding: 12px; font-size: 18px; border: 1px solid #ccc; border-radius: 5px; }
+        button { padding: 12px 20px; background: #3498db; color: white; border: none; border-radius: 5px; cursor: pointer; }
         
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            font-size: 18px;
-            line-height: 1.6;
-            background-color: #ffffff;
-            color: #333333;
-            height: 100vh;
-            overflow: hidden;
-        }
-        
-        /* 容器布局 */
-        .container {
-            display: flex;
-            height: 100vh;
-            width: 100vw;
-        }
-        
-        /* 侧边栏样式 */
-        .sidebar {
-            width: 280px;
-            background-color: #f8f9fa;
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-        }
-        
-        .sidebar-header {
-            padding: 20px 15px;
-            background-color: var(--primary-color);
-            color: white;
-            text-align: center;
-        }
-        
-        .sidebar-header h1 {
-            font-size: 24px;
-            margin-bottom: 5px;
-        }
-        
-        .sidebar-header p {
-            font-size: 14px;
-            opacity: 0.9;
-        }
-        
-        .user-info {
-            padding: 15px;
-            background-color: #e8f4fc;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-        }
-        
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background-color: var(--user-color);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
-        
-        .user-name {
-            font-weight: bold;
-            color: var(--dark-color);
-        }
-        
-        .warning-box {
-            background-color: #fff3cd;
+        .debug-info {
+            background: #fff3cd;
             border: 1px solid #ffeaa7;
-            color: #856404;
-            padding: 12px;
-            margin: 15px;
-            border-radius: 8px;
-            font-size: 16px;
-        }
-        
-        .warning-box i {
-            margin-right: 8px;
-            color: #f39c12;
-        }
-        
-        .online-users {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-        }
-        
-        .online-users h3 {
-            margin-bottom: 15px;
-            color: var(--dark-color);
-            font-size: 20px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid var(--border-color);
-        }
-        
-        .user-list {
-            list-style: none;
-        }
-        
-        .user-list li {
-            padding: 12px 15px;
-            margin-bottom: 10px;
-            background-color: white;
-            border-radius: 8px;
-            border-left: 4px solid var(--secondary-color);
-            display: flex;
-            align-items: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        }
-        
-        .user-list li.self {
-            border-left-color: var(--primary-color);
-            background-color: #f0f8ff;
-        }
-        
-        .user-list li.inactive {
-            border-left-color: #95a5a6;
-            opacity: 0.7;
-        }
-        
-        .user-status {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: var(--secondary-color);
-            margin-right: 12px;
-            flex-shrink: 0;
-        }
-        
-        .user-status.inactive {
-            background-color: #95a5a6;
-        }
-        
-        .language-switcher {
-            padding: 15px;
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            flex-shrink: 0;
-        }
-        
-        .lang-btn {
-            padding: 8px 16px;
-            border: 1px solid var(--border-color);
-            background-color: white;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: all 0.3s;
-        }
-        
-        .lang-btn.active {
-            background-color: var(--primary-color);
-            color: white;
-            border-color: var(--primary-color);
-        }
-        
-        /* 聊天区域样式 */
-        .chat-area {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            min-width: 0;
-        }
-        
-        .chat-header {
-            padding: 15px 20px;
-            background-color: var(--light-color);
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-shrink: 0;
-        }
-        
-        .chat-title {
-            font-size: 22px;
-            color: var(--dark-color);
-            font-weight: bold;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        
-        .connection-status {
-            font-size: 16px;
-            display: flex;
-            align-items: center;
-            flex-shrink: 0;
-        }
-        
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background-color: var(--secondary-color);
-            margin-right: 8px;
-            flex-shrink: 0;
-        }
-        
-        .status-dot.connected {
-            background-color: var(--secondary-color);
-        }
-        
-        .status-dot.disconnected {
-            background-color: var(--danger-color);
-        }
-        
-        .messages-container {
-            flex: 1;
-            overflow-y: auto;
-            padding: 20px;
-            background-color: #fafafa;
-            -webkit-overflow-scrolling: touch;
-        }
-        
-        .message {
-            margin-bottom: 18px;
-            max-width: 85%;
-            display: flex;
-            flex-direction: column;
-            animation: fadeIn 0.3s ease;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        
-        .message.self {
-            align-self: flex-end;
-            align-items: flex-end;
-        }
-        
-        .message.other {
-            align-self: flex-start;
-            align-items: flex-start;
-        }
-        
-        .message-header {
-            display: flex;
-            align-items: center;
-            margin-bottom: 5px;
-            flex-wrap: wrap;
-        }
-        
-        .message-sender {
-            font-weight: bold;
-            margin-right: 10px;
-            color: var(--dark-color);
-            flex-shrink: 0;
-        }
-        
-        .message-time {
-            font-size: 14px;
-            color: #7f8c8d;
-            flex-shrink: 0;
-        }
-        
-        .message-content {
-            padding: 12px 18px;
-            border-radius: 18px;
-            word-wrap: break-word;
-            font-size: 18px;
-            line-height: 1.5;
-            overflow-wrap: break-word;
-            word-break: break-word;
-        }
-        
-        .message.self .message-content {
-            background-color: var(--primary-color);
-            color: white;
-            border-bottom-right-radius: 5px;
-        }
-        
-        .message.other .message-content {
-            background-color: white;
-            color: var(--dark-color);
-            border: 1px solid var(--border-color);
-            border-bottom-left-radius: 5px;
-        }
-        
-        .system-message {
-            text-align: center;
-            color: #7f8c8d;
-            font-style: italic;
-            margin: 15px 0;
-            font-size: 16px;
             padding: 10px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
+            margin: 10px 0;
+            border-radius: 5px;
+            font-size: 14px;
         }
         
-        /* 输入区域样式 */
-        .input-area {
-            padding: 15px 20px;
-            border-top: 1px solid var(--border-color);
-            background-color: white;
-            display: flex;
-            gap: 10px;
-            flex-shrink: 0;
-            position: relative;
-            z-index: 10;
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            font-size: 14px;
         }
-        
-        #messageInput {
-            flex: 1;
-            padding: 12px 15px;
-            font-size: 18px;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            outline: none;
-            transition: border 0.3s;
-            min-width: 0;
-        }
-        
-        #messageInput:focus {
-            border-color: var(--primary-color);
-        }
-        
-        #sendButton {
-            padding: 12px 20px;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 18px;
-            font-weight: bold;
-            transition: background-color 0.3s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            min-width: 80px;
-            flex-shrink: 0;
-        }
-        
-        #sendButton:hover {
-            background-color: #2980b9;
-        }
-        
-        #sendButton i {
-            margin-right: 8px;
-        }
-        
-        #sendButton:disabled {
-            background-color: #95a5a6;
-            cursor: not-allowed;
-        }
-        
-        /* 空聊天状态 */
-        .empty-chat {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            color: #7f8c8d;
-            text-align: center;
-            padding: 20px;
-        }
-        
-        .empty-chat i {
-            font-size: 48px;
-            margin-bottom: 20px;
-            color: #bdc3c7;
-        }
-        
-        .empty-chat p {
-            font-size: 18px;
-            max-width: 400px;
-        }
-        
-        /* 加载状态 */
-        .loading {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
-        
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #f3f3f3;
-            border-top: 4px solid var(--primary-color);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-        
-        /* 移动端适配 */
-        @media (max-width: 768px) {
-            .container {
-                flex-direction: column;
-            }
-            
-            .sidebar {
-                width: 100%;
-                height: auto;
-                max-height: 50vh;
-                border-right: none;
-                border-bottom: 1px solid var(--border-color);
-                position: fixed;
-                top: 0;
-                left: 0;
-                z-index: 100;
-                transform: translateY(-100%);
-                transition: transform 0.3s ease;
-            }
-            
-            .sidebar.active {
-                transform: translateY(0);
-            }
-            
-            .sidebar-header {
-                padding: 15px 10px;
-            }
-            
-            .sidebar-header h1 {
-                font-size: 20px;
-            }
-            
-            .online-users h3 {
-                font-size: 18px;
-            }
-            
-            .chat-area {
-                height: 100vh;
-                padding-top: 0;
-            }
-            
-            .chat-header {
-                padding: 12px 15px;
-                position: sticky;
-                top: 0;
-                z-index: 5;
-                background-color: white;
-                border-bottom: 1px solid var(--border-color);
-            }
-            
-            .chat-title {
-                font-size: 18px;
-            }
-            
-            .message {
-                max-width: 90%;
-            }
-            
-            .input-area {
-                padding: 12px 15px;
-                position: sticky;
-                bottom: 0;
-                background-color: white;
-                box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
-                border-top: 1px solid var(--border-color);
-            }
-            
-            #messageInput {
-                padding: 12px;
-                font-size: 16px;
-            }
-            
-            #sendButton {
-                padding: 12px 15px;
-                font-size: 16px;
-                min-width: 70px;
-            }
-            
-            .messages-container {
-                padding: 15px;
-                padding-bottom: 80px;
-                padding-top: 70px;
-            }
-            
-            .empty-chat {
-                padding-top: 70px;
-                padding-bottom: 80px;
-            }
-            
-            .user-list li {
-                padding: 10px;
-                font-size: 16px;
-            }
-            
-            .message-content {
-                font-size: 16px;
-                padding: 10px 15px;
-            }
-        }
-        
-        /* 非常小的屏幕 */
-        @media (max-width: 480px) {
-            .sidebar-header h1 {
-                font-size: 18px;
-            }
-            
-            .warning-box {
-                padding: 10px;
-                font-size: 14px;
-                margin: 10px;
-            }
-            
-            .online-users {
-                padding: 10px;
-            }
-            
-            .chat-title {
-                font-size: 16px;
-            }
-            
-            .input-area {
-                padding: 10px;
-            }
-            
-            #messageInput {
-                padding: 10px;
-                font-size: 16px;
-            }
-            
-            #sendButton {
-                padding: 10px 12px;
-                min-width: 65px;
-            }
-            
-            .messages-container {
-                padding-bottom: 70px;
-                padding-top: 60px;
-            }
-            
-            .empty-chat {
-                padding-top: 60px;
-                padding-bottom: 70px;
-            }
-            
-            .empty-chat i {
-                font-size: 36px;
-            }
-            
-            .empty-chat p {
-                font-size: 16px;
-            }
-        }
-        
-        /* 移动端侧边栏切换按钮 */
-        .mobile-toggle {
-            display: none;
-            position: fixed;
-            top: 15px;
-            left: 15px;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            font-size: 20px;
-            z-index: 1000;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
+        .status.connected { background: #d4edda; color: #155724; }
+        .status.connecting { background: #fff3cd; color: #856404; }
+        .status.error { background: #f8d7da; color: #721c24; }
         
         @media (max-width: 768px) {
-            .mobile-toggle {
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            
-            .chat-header {
-                padding-left: 60px;
-            }
-        }
-        
-        /* 滚动条样式 */
-        ::-webkit-scrollbar {
-            width: 8px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: #c1c1c1;
-            border-radius: 4px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: #a8a8a8;
-        }
-        
-        /* 键盘弹出时的调整 */
-        @media (max-height: 500px) {
-            .messages-container {
-                padding-bottom: 100px;
-            }
-            
-            .empty-chat {
-                padding-bottom: 100px;
-            }
+            .container { flex-direction: column; }
+            .sidebar { width: 100%; height: auto; }
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <!-- 侧边栏：在线用户列表 -->
-        <div class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <h1 id="chatroomTitle">实时匿名聊天室</h1>
-                <p id="welcomeText">欢迎！请勿透露个人信息</p>
+        <div class="sidebar">
+            <h2>匿名聊天室</h2>
+            <div class="debug-info">
+                <div><strong>状态:</strong> <span id="statusText" class="status connecting">连接中...</span></div>
+                <div><strong>用户:</strong> <span id="userInfo">未登录</span></div>
+                <div><strong>消息数:</strong> <span id="messageCount">0</span></div>
+                <button onclick="checkConnection()" style="margin-top: 10px; padding: 5px 10px; font-size: 14px;">测试连接</button>
+                <button onclick="clearLocalData()" style="margin-top: 5px; padding: 5px 10px; font-size: 14px; background: #e74c3c;">清除本地数据</button>
             </div>
-            
-            <div class="user-info">
-                <div class="user-avatar" id="userAvatar">甲</div>
-                <div>
-                    <div class="user-name" id="userName">甲</div>
-                    <div id="userIdText">连接中...</div>
+            <div style="margin-top: 20px;">
+                <h3>配置信息</h3>
+                <div style="font-size: 12px; word-break: break-all;">
+                    <div>App ID 前6位: <span id="appIdPreview">未设置</span></div>
+                    <div>当前域名: <span id="currentDomain"></span></div>
                 </div>
-            </div>
-            
-            <div class="warning-box">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span id="warningText">匿名聊天室，请勿透露任何个人信息</span>
-            </div>
-            
-            <div class="online-users">
-                <h3 id="onlineUsersTitle">在线用户 (<span id="onlineCount">0</span>)</h3>
-                <ul class="user-list" id="userList">
-                    <div class="loading">
-                        <div class="spinner"></div>
-                    </div>
-                </ul>
-            </div>
-            
-            <div class="language-switcher">
-                <button class="lang-btn active" id="langZh">中文</button>
-                <button class="lang-btn" id="langEn">English</button>
             </div>
         </div>
         
-        <!-- 聊天区域 -->
         <div class="chat-area">
-            <div class="chat-header">
-                <div class="chat-title" id="chatTitle">公共聊天室</div>
-                <div class="connection-status">
-                    <span class="status-dot disconnected" id="statusDot"></span>
-                    <span id="statusText">连接中...</span>
-                </div>
+            <div class="messages" id="messages">
+                <div id="welcomeMessage">正在连接 LeanCloud...</div>
             </div>
-            
-            <div class="messages-container" id="messagesContainer">
-                <div class="loading">
-                    <div class="spinner"></div>
-                </div>
-            </div>
-            
-            <!-- 输入区域 -->
             <div class="input-area">
-                <input type="text" id="messageInput" placeholder="输入消息..." maxlength="500" autocomplete="off" disabled>
-                <button id="sendButton" disabled>
-                    <i class="fas fa-paper-plane"></i>
-                    <span id="sendText">发送</span>
-                </button>
+                <input type="text" id="messageInput" placeholder="输入消息..." disabled>
+                <button id="sendButton" onclick="sendMessage()" disabled>发送</button>
             </div>
         </div>
-        
-        <!-- 移动端侧边栏切换按钮 -->
-        <button class="mobile-toggle" id="mobileToggle">
-            <i class="fas fa-users"></i>
-        </button>
     </div>
 
     <script>
-        // 语言配置
-        const translations = {
-            zh: {
-                title: "实时匿名聊天室",
-                welcome: "欢迎！请勿透露个人信息",
-                warning: "匿名聊天室，请勿透露任何个人信息",
-                onlineUsers: "在线用户",
-                placeholder: "输入消息...",
-                send: "发送",
-                emptyChat: "还没有消息，发送第一条消息开始聊天吧！",
-                connected: "已连接",
-                disconnected: "连接中...",
-                connecting: "正在连接...",
-                you: " (你)",
-                chatTitle: "公共聊天室",
-                newUserJoined: "新用户加入了聊天",
-                userLeft: "用户离开了聊天",
-                typing: "正在输入...",
-                connectionError: "连接失败，请刷新页面重试",
-                configError: "需要配置 LeanCloud"
-            },
-            en: {
-                title: "Real-time Anonymous Chat",
-                welcome: "Welcome! Do not share personal information",
-                warning: "Anonymous chat room, do not share any personal information",
-                onlineUsers: "Online Users",
-                placeholder: "Type a message...",
-                send: "Send",
-                emptyChat: "No messages yet. Send the first message to start chatting!",
-                connected: "Connected",
-                disconnected: "Connecting...",
-                connecting: "Connecting...",
-                you: " (you)",
-                chatTitle: "Public Chat Room",
-                newUserJoined: "New user joined the chat",
-                userLeft: "User left the chat",
-                typing: "is typing...",
-                connectionError: "Connection failed, please refresh the page",
-                configError: "Need to configure LeanCloud"
-            }
+        // ===================== 配置区域 =====================
+        // 请替换为您的 LeanCloud 配置
+        const LEANCLOUD_CONFIG = {
+            appId: 'x1C7t7inH9TDv1Ku9msDyOWi-MdYXbMMI',      // 替换为您的 App ID
+            appKey: 'KLfByl3kEn1BSfhqgu3WWjDk',   // 替换为您的 App Key
+            serverURL: ''  // 通常留空，除非使用自定义域名
         };
         
-        // 当前语言
-        let currentLang = 'zh';
+        // 显示配置预览
+        document.getElementById('appIdPreview').textContent = LEANCLOUD_CONFIG.appId ? 
+            LEANCLOUD_CONFIG.appId.substring(0, 6) + '...' : '未设置';
+        document.getElementById('currentDomain').textContent = window.location.hostname;
         
-        // 可用用户名列表
-        const availableUsernames = ['甲', '乙', '丙', '丁', '孙悟空', '哪吒', '敖丙', 'susu', 'haha'];
-        
-        // 当前用户信息
+        // ===================== 全局变量 =====================
         let currentUser = {
             id: null,
-            name: null,
-            avatar: null,
-            clientId: null
+            name: null
         };
         
-        // LeanCloud 配置
-        const LEANCLOUD_CONFIG = {
-            appId: 'x1C7t7inH9TDv1Ku9msDyOWi-MdYXbMMI',
-            appKey: 'KLfByl3kEn1BSfhqgu3WWjDk'
-                    };
-        
-        // 全局变量
-        let realtime = null;
-        let conversation = null;
-        let onlineUsers = new Map();
-        
-        // 页面加载时初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            // 初始化界面
-            updateUIForLanguage();
+        // ===================== 初始化 =====================
+        document.addEventListener('DOMContentLoaded', async function() {
+            updateStatus('正在初始化...', 'connecting');
             
-            // 设置语言切换功能
-            document.getElementById('langZh').addEventListener('click', () => switchLanguage('zh'));
-            document.getElementById('langEn').addEventListener('click', () => switchLanguage('en'));
+            // 1. 检查配置
+            if (!LEANCLOUD_CONFIG.appId || LEANCLOUD_CONFIG.appId.includes('YOUR_') || 
+                !LEANCLOUD_CONFIG.appKey || LEANCLOUD_CONFIG.appKey.includes('YOUR_')) {
+                showError('请先配置 LeanCloud App ID 和 App Key');
+                return;
+            }
             
-            // 设置发送消息功能
-            document.getElementById('sendButton').addEventListener('click', sendMessage);
-            document.getElementById('messageInput').addEventListener('keypress', function(e) {
-                if (e.key === 'Enter') {
-                    sendMessage();
-                }
-            });
-            
-            // 移动端侧边栏切换
-            document.getElementById('mobileToggle').addEventListener('click', toggleSidebar);
-            
-            // 初始化 LeanCloud
-            initializeLeanCloud();
-            
-            // 调整输入框位置
-            adjustInputPositionForMobile();
-            window.addEventListener('resize', adjustInputPositionForMobile);
-            
-            // 页面关闭时清理
-            window.addEventListener('beforeunload', cleanupOnExit);
-        });
-        
-        // 初始化 LeanCloud
-        async function initializeLeanCloud() {
+            // 2. 初始化 LeanCloud
             try {
-                updateConnectionStatus('connecting');
-                
-                // 检查配置
-                if (LEANCLOUD_CONFIG.appId.includes('YOUR_APP_ID')) {
-                    showConfigurationError();
-                    return;
-                }
-                
-                // 初始化 LeanCloud
                 AV.init({
                     appId: LEANCLOUD_CONFIG.appId,
                     appKey: LEANCLOUD_CONFIG.appKey,
                     serverURL: LEANCLOUD_CONFIG.serverURL || undefined
                 });
                 
-                // 初始化当前用户
-                await initCurrentUser();
+                updateStatus('LeanCloud 初始化成功', 'connected');
                 
-                // 初始化实时通信
-                await initRealtime();
+                // 3. 初始化用户
+                await initUser();
                 
-                // 加载历史消息
-                await loadHistoricalMessages();
+                // 4. 测试连接
+                await testConnection();
                 
-                updateConnectionStatus('connected');
+                // 5. 加载历史消息
+                await loadMessages();
                 
-                // 启用输入框
+                // 6. 启用输入框
                 document.getElementById('messageInput').disabled = false;
                 document.getElementById('sendButton').disabled = false;
+                document.getElementById('messageInput').focus();
                 
             } catch (error) {
                 console.error('初始化失败:', error);
-                updateConnectionStatus('disconnected');
-                showConnectionError();
+                showError('初始化失败: ' + error.message);
             }
-        }
+        });
         
-        // 显示配置错误
-        function showConfigurationError() {
-            const messagesContainer = document.getElementById('messagesContainer');
-            messagesContainer.innerHTML = `
-                <div class="empty-chat">
-                    <i class="fas fa-cog"></i>
-                    <h3>需要配置 LeanCloud</h3>
-                    <p>请按照以下步骤配置聊天室：</p>
-                    <ol style="text-align: left; margin: 15px 0; max-width: 500px;">
-                        <li>访问 <a href="https://leancloud.app/" target="_blank">leancloud.app</a> 注册账户</li>
-                        <li>创建一个新应用（选择国际版）</li>
-                        <li>进入应用设置 → 应用凭证</li>
-                        <li>复制 App ID 和 App Key</li>
-                        <li>替换代码中的 LEANCLOUD_CONFIG 配置</li>
-                        <li>在存储中创建两个 Class：
-                            <ul>
-                                <li><code>ChatMessage</code>（用于存储消息）</li>
-                                <li><code>OnlineUser</code>（用于存储在线用户）</li>
-                            </ul>
-                        </li>
-                    </ol>
-                    <div style="margin-top: 20px;">
-                        <button onclick="showConfigForm()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                            我已配置，填入信息
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
+        // ===================== 核心函数 =====================
         
-        // 显示配置表单
-        function showConfigForm() {
-            const messagesContainer = document.getElementById('messagesContainer');
-            messagesContainer.innerHTML = `
-                <div class="empty-chat">
-                    <i class="fas fa-cog"></i>
-                    <h3>配置 LeanCloud</h3>
-                    <div style="max-width: 500px; margin: 20px auto;">
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">App ID:</label>
-                            <input type="text" id="configAppId" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px;" placeholder="请输入 App ID">
-                        </div>
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">App Key:</label>
-                            <input type="text" id="configAppKey" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px;" placeholder="请输入 App Key">
-                        </div>
-                        <div style="margin-bottom: 15px;">
-                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Server URL (可选):</label>
-                            <input type="text" id="configServerURL" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px;" placeholder="https://your-domain.example.com">
-                        </div>
-                        <button onclick="saveConfig()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
-                            保存配置并重新连接
-                        </button>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // 保存配置
-        function saveConfig() {
-            const appId = document.getElementById('configAppId').value.trim();
-            const appKey = document.getElementById('configAppKey').value.trim();
-            const serverURL = document.getElementById('configServerURL').value.trim();
-            
-            if (!appId || !appKey) {
-                alert('请填写 App ID 和 App Key');
-                return;
-            }
-            
-            // 保存到 localStorage
-            localStorage.setItem('leancloudConfig', JSON.stringify({
-                appId,
-                appKey,
-                serverURL: serverURL || undefined
-            }));
-            
-            // 重新加载页面
-            location.reload();
-        }
-        
-        // 显示连接错误
-        function showConnectionError() {
-            const messagesContainer = document.getElementById('messagesContainer');
-            messagesContainer.innerHTML = `
-                <div class="empty-chat">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <h3>${translations[currentLang].connectionError}</h3>
-                    <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        重新加载页面
-                    </button>
-                </div>
-            `;
-        }
-        
-        // 初始化当前用户
-        async function initCurrentUser() {
-            // 生成或获取用户ID
-            let userId = localStorage.getItem('anonymousChatUserId');
+        // 初始化用户
+        async function initUser() {
+            // 生成用户ID
+            let userId = localStorage.getItem('chatUserId');
             if (!userId) {
                 userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-                localStorage.setItem('anonymousChatUserId', userId);
+                localStorage.setItem('chatUserId', userId);
             }
             
-            // 获取或分配用户名
-            let username = localStorage.getItem('anonymousChatUsername');
+            // 分配用户名
+            const usernames = ['甲', '乙', '丙', '丁', '孙悟空', '哪吒', '敖丙', 'susu', 'haha'];
+            let username = localStorage.getItem('chatUsername');
             if (!username) {
-                const usernameIndex = Math.floor(Math.random() * availableUsernames.length);
-                username = availableUsernames[usernameIndex];
-                localStorage.setItem('anonymousChatUsername', username);
+                username = usernames[Math.floor(Math.random() * usernames.length)];
+                localStorage.setItem('chatUsername', username);
             }
             
-            // 生成客户端ID（用于实时通信）
-            const clientId = 'client_' + userId;
-            
-            // 设置用户信息
-            currentUser = {
-                id: userId,
-                name: username,
-                avatar: username.charAt(0),
-                clientId: clientId
-            };
-            
-            // 更新用户界面
-            document.getElementById('userAvatar').textContent = currentUser.avatar;
-            document.getElementById('userName').textContent = currentUser.name;
-            document.getElementById('userIdText').textContent = `ID: ${currentUser.id.substring(0, 8)}...`;
-            
-            // 注册用户为在线状态
-            await registerUserAsOnline();
+            currentUser = { id: userId, name: username };
+            document.getElementById('userInfo').textContent = username + ' (' + userId.substring(0, 8) + '...)';
         }
         
-        // 注册用户为在线状态
-        async function registerUserAsOnline() {
+        // 测试连接
+        async function testConnection() {
             try {
-                const OnlineUser = AV.Object.extend('OnlineUser');
-                const onlineUser = new OnlineUser();
+                updateStatus('测试连接中...', 'connecting');
                 
-                // 设置用户信息
-                onlineUser.set('userId', currentUser.id);
-                onlineUser.set('username', currentUser.name);
-                onlineUser.set('clientId', currentUser.clientId);
-                onlineUser.set('lastActive', new Date());
+                // 尝试创建一个测试对象
+                const TestObject = AV.Object.extend('TestConnection');
+                const testObj = new TestObject();
+                testObj.set('testField', 'testValue_' + Date.now());
+                testObj.set('userId', currentUser.id);
                 
-                // 保存到 LeanCloud
-                await onlineUser.save();
+                const savedObj = await testObj.save();
+                updateStatus('连接测试成功 - 对象ID: ' + savedObj.id, 'connected');
                 
-                // 添加到本地在线用户列表
-                onlineUsers.set(currentUser.id, {
-                    id: currentUser.id,
-                    name: currentUser.name,
-                    clientId: currentUser.clientId,
-                    lastActive: new Date()
-                });
+                // 清理测试对象
+                await savedObj.destroy();
                 
-                // 更新在线用户列表
-                updateUserListUI();
-                
+                return true;
             } catch (error) {
-                console.error('注册在线用户失败:', error);
+                console.error('连接测试失败:', error);
+                showError('连接测试失败: ' + error.message);
+                return false;
             }
         }
         
-        // 初始化实时通信
-        async function initRealtime() {
+        // 加载消息
+        async function loadMessages() {
             try {
-                // 创建实时通信实例
-                realtime = new AV.Realtime({
-                    appId: LEANCLOUD_CONFIG.appId,
-                    appKey: LEANCLOUD_CONFIG.appKey,
-                    server: LEANCLOUD_CONFIG.serverURL || undefined
-                });
-                
-                // 创建客户端
-                const client = await realtime.createIMClient(currentUser.clientId);
-                
-                // 创建或获取对话（聊天室）
-                conversation = await client.createConversation({
-                    name: '匿名聊天室',
-                    transient: true // 临时对话，不保存到服务器
-                });
-                
-                // 订阅消息
-                conversation.on('message', (message) => {
-                    // 避免重复显示自己的消息
-                    if (message.from !== currentUser.clientId) {
-                        const messageData = message._lctext || message.text;
-                        addMessageToChat({
-                            id: message.id,
-                            sender: {
-                                id: message.from,
-                                name: getUsernameFromClientId(message.from) || '未知用户'
-                            },
-                            content: messageData,
-                            timestamp: new Date(message.timestamp),
-                            time: new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                        });
-                    }
-                });
-                
-                // 订阅成员变化
-                conversation.on('membersjoined', (members, byClientId) => {
-                    members.forEach(memberId => {
-                        if (memberId !== currentUser.clientId) {
-                            addSystemMessage(`用户 ${getUsernameFromClientId(memberId) || '新用户'} 加入了聊天`);
-                        }
-                    });
-                });
-                
-                // 定期更新在线用户
-                setInterval(updateOnlineUsers, 30000);
-                
-            } catch (error) {
-                console.error('初始化实时通信失败:', error);
-                throw error;
-            }
-        }
-        
-        // 加载历史消息
-        async function loadHistoricalMessages() {
-            try {
-                // 查询最近50条消息
                 const query = new AV.Query('ChatMessage');
                 query.descending('createdAt');
-                query.limit(50);
+                query.limit(20);
                 
                 const messages = await query.find();
+                document.getElementById('messageCount').textContent = messages.length;
                 
-                const messagesContainer = document.getElementById('messagesContainer');
-                messagesContainer.innerHTML = '';
+                const messagesDiv = document.getElementById('messages');
+                messagesDiv.innerHTML = '';
                 
                 if (messages.length === 0) {
-                    showEmptyChatState();
+                    messagesDiv.innerHTML = '<div style="color: #666; text-align: center; padding: 20px;">还没有消息，发送第一条吧！</div>';
                     return;
                 }
                 
-                hideEmptyChatState();
-                
                 // 按时间正序显示
-                messages.reverse().forEach(message => {
-                    addMessageToChat({
-                        id: message.id,
-                        sender: {
-                            id: message.get('userId'),
-                            name: message.get('username')
-                        },
-                        content: message.get('content'),
-                        timestamp: message.createdAt,
-                        time: message.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                    }, false);
+                messages.reverse().forEach(msg => {
+                    addMessageToUI({
+                        id: msg.id,
+                        sender: msg.get('username'),
+                        content: msg.get('content'),
+                        time: msg.createdAt.toLocaleTimeString()
+                    });
                 });
                 
-                // 滚动到底部
-                setTimeout(() => {
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                }, 100);
-                
             } catch (error) {
-                console.error('加载历史消息失败:', error);
-                showEmptyChatState();
+                console.error('加载消息失败:', error);
+                showError('加载消息失败: ' + error.message);
             }
         }
         
         // 发送消息
         async function sendMessage() {
-            const messageInput = document.getElementById('messageInput');
-            const messageText = messageInput.value.trim();
+            const input = document.getElementById('messageInput');
+            const messageText = input.value.trim();
             
-            if (!messageText || !conversation || !currentUser.id) return;
+            if (!messageText) return;
             
             try {
-                // 禁用发送按钮防止重复发送
-                document.getElementById('sendButton').disabled = true;
-                
-                // 发送实时消息
-                await conversation.send(new AV.TextMessage(messageText));
-                
-                // 同时保存到数据库（用于历史记录）
+                // 1. 创建消息对象
                 const ChatMessage = AV.Object.extend('ChatMessage');
-                const chatMessage = new ChatMessage();
+                const message = new ChatMessage();
                 
-                chatMessage.set('userId', currentUser.id);
-                chatMessage.set('username', currentUser.name);
-                chatMessage.set('content', messageText);
-                chatMessage.set('clientId', currentUser.clientId);
+                message.set('userId', currentUser.id);
+                message.set('username', currentUser.name);
+                message.set('content', messageText);
                 
-                await chatMessage.save();
+                // 2. 保存到 LeanCloud
+                const savedMessage = await message.save();
                 
-                // 更新用户活跃状态
-                await updateUserActivity();
-                
-                // 显示自己的消息（实时通信会返回，但我们需要立即显示）
-                addMessageToChat({
-                    id: Date.now().toString(),
-                    sender: {
-                        id: currentUser.id,
-                        name: currentUser.name
-                    },
+                // 3. 显示消息
+                addMessageToUI({
+                    id: savedMessage.id,
+                    sender: currentUser.name,
                     content: messageText,
-                    timestamp: new Date(),
-                    time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                    time: new Date().toLocaleTimeString(),
+                    isSelf: true
                 });
                 
-                // 清空输入框
-                messageInput.value = '';
-                messageInput.focus();
+                // 4. 更新消息计数
+                const count = parseInt(document.getElementById('messageCount').textContent);
+                document.getElementById('messageCount').textContent = count + 1;
                 
-                // 隐藏空聊天状态
-                hideEmptyChatState();
+                // 5. 清空输入框
+                input.value = '';
+                input.focus();
+                
+                updateStatus('消息发送成功: ' + savedMessage.id, 'connected');
                 
             } catch (error) {
                 console.error('发送消息失败:', error);
-                alert('发送消息失败，请重试');
-            } finally {
-                // 重新启用发送按钮
-                document.getElementById('sendButton').disabled = false;
+                showError('发送失败: ' + error.message);
             }
         }
         
-        // 更新用户活跃状态
-        async function updateUserActivity() {
-            try {
-                // 更新在线用户记录
-                const query = new AV.Query('OnlineUser');
-                query.equalTo('userId', currentUser.id);
-                const result = await query.first();
-                
-                if (result) {
-                    result.set('lastActive', new Date());
-                    await result.save();
-                }
-                
-                // 清理不活跃用户（30秒未活动）
-                const cutoffTime = new Date(Date.now() - 30000);
-                const inactiveQuery = new AV.Query('OnlineUser');
-                inactiveQuery.lessThan('lastActive', cutoffTime);
-                
-                const inactiveUsers = await inactiveQuery.find();
-                await AV.Object.destroyAll(inactiveUsers);
-                
-                // 更新在线用户列表
-                await updateOnlineUsers();
-                
-            } catch (error) {
-                console.error('更新用户活跃状态失败:', error);
-            }
-        }
+        // ===================== 辅助函数 =====================
         
-        // 更新在线用户
-        async function updateOnlineUsers() {
-            try {
-                const query = new AV.Query('OnlineUser');
-                const users = await query.find();
-                
-                onlineUsers.clear();
-                users.forEach(user => {
-                    onlineUsers.set(user.get('userId'), {
-                        id: user.get('userId'),
-                        name: user.get('username'),
-                        clientId: user.get('clientId'),
-                        lastActive: user.get('lastActive')
-                    });
-                });
-                
-                updateUserListUI();
-                
-            } catch (error) {
-                console.error('更新在线用户失败:', error);
-            }
-        }
-        
-        // 根据clientId获取用户名
-        function getUsernameFromClientId(clientId) {
-            for (let [userId, user] of onlineUsers) {
-                if (user.clientId === clientId) {
-                    return user.name;
-                }
-            }
-            return null;
-        }
-        
-        // 将消息添加到聊天界面
-        function addMessageToChat(message, scrollToBottom = true) {
-            const messagesContainer = document.getElementById('messagesContainer');
+        function addMessageToUI(msg) {
+            const messagesDiv = document.getElementById('messages');
+            const msgDiv = document.createElement('div');
             
-            // 创建消息元素
-            const messageElement = document.createElement('div');
-            const isSelf = message.sender.id === currentUser.id;
-            messageElement.className = `message ${isSelf ? 'self' : 'other'}`;
-            
-            // 格式化时间
-            const time = message.time || new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-            
-            messageElement.innerHTML = `
-                <div class="message-header">
-                    <span class="message-sender">${message.sender.name}${isSelf ? translations[currentLang].you : ''}</span>
-                    <span class="message-time">${time}</span>
-                </div>
-                <div class="message-content">${escapeHtml(message.content)}</div>
+            msgDiv.style.cssText = `
+                margin: 10px 0;
+                padding: 10px 15px;
+                background: ${msg.isSelf ? '#3498db' : 'white'};
+                color: ${msg.isSelf ? 'white' : '#333'};
+                border-radius: 10px;
+                max-width: 80%;
+                ${msg.isSelf ? 'margin-left: auto; border-bottom-right-radius: 3px;' : 'border-bottom-left-radius: 3px;'}
+                border: ${msg.isSelf ? 'none' : '1px solid #ddd'};
             `;
             
-            messagesContainer.appendChild(messageElement);
+            msgDiv.innerHTML = `
+                <div style="font-weight: bold; margin-bottom: 5px;">
+                    ${msg.sender}${msg.isSelf ? ' (我)' : ''}
+                </div>
+                <div>${escapeHtml(msg.content)}</div>
+                <div style="font-size: 12px; margin-top: 5px; opacity: 0.8;">
+                    ${msg.time}
+                </div>
+            `;
             
-            // 滚动到底部
-            if (scrollToBottom) {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }
+            messagesDiv.appendChild(msgDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
         
-        // 更新用户列表UI
-        function updateUserListUI() {
-            const userListContainer = document.getElementById('userList');
-            const onlineCount = document.getElementById('onlineCount');
-            
-            // 更新在线人数
-            onlineCount.textContent = onlineUsers.size;
-            
-            // 清空当前列表
-            userListContainer.innerHTML = '';
-            
-            // 添加用户到列表
-            onlineUsers.forEach((user, userId) => {
-                const isCurrentUser = userId === currentUser.id;
-                const isActive = (Date.now() - new Date(user.lastActive).getTime()) < 30000;
-                
-                const userItem = document.createElement('li');
-                userItem.className = `user-list-item ${isCurrentUser ? 'self' : ''} ${!isActive ? 'inactive' : ''}`;
-                
-                userItem.innerHTML = `
-                    <span class="user-status ${!isActive ? 'inactive' : ''}"></span>
-                    <span class="user-name">${user.name}${isCurrentUser ? translations[currentLang].you : ''}</span>
-                `;
-                
-                userListContainer.appendChild(userItem);
-            });
-            
-            // 如果没有其他用户
-            if (onlineUsers.size <= 1) {
-                const emptyItem = document.createElement('li');
-                emptyItem.innerHTML = '<span style="color: #7f8c8d; font-style: italic;">等待其他用户加入...</span>';
-                userListContainer.appendChild(emptyItem);
-            }
+        function updateStatus(text, type) {
+            const statusEl = document.getElementById('statusText');
+            statusEl.textContent = text;
+            statusEl.className = 'status ' + type;
+            console.log('状态:', text);
         }
         
-        // 隐藏空聊天状态
-        function hideEmptyChatState() {
-            const emptyChatState = document.getElementById('emptyChatState');
-            if (emptyChatState) {
-                emptyChatState.style.display = 'none';
-            }
-        }
-        
-        // 显示空聊天状态
-        function showEmptyChatState() {
-            const messagesContainer = document.getElementById('messagesContainer');
-            messagesContainer.innerHTML = `
-                <div class="empty-chat" id="emptyChatState">
-                    <i class="fas fa-comments"></i>
-                    <p>${translations[currentLang].emptyChat}</p>
+        function showError(text) {
+            updateStatus(text, 'error');
+            
+            const messagesDiv = document.getElementById('messages');
+            messagesDiv.innerHTML = `
+                <div style="color: #721c24; background: #f8d7da; padding: 15px; border-radius: 5px; margin: 10px;">
+                    <h3>错误</h3>
+                    <p>${escapeHtml(text)}</p>
+                    <p>请检查：</p>
+                    <ol>
+                        <li>LeanCloud App ID 和 App Key 是否正确</li>
+                        <li>是否在 LeanCloud 控制台设置了 Web 安全域名</li>
+                        <li>网络连接是否正常</li>
+                    </ol>
+                    <button onclick="location.reload()" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 3px; cursor: pointer;">
+                        重新加载
+                    </button>
                 </div>
             `;
         }
         
-        // 添加系统消息
-        function addSystemMessage(text) {
-            const messagesContainer = document.getElementById('messagesContainer');
-            
-            const systemMessage = document.createElement('div');
-            systemMessage.className = 'system-message';
-            systemMessage.textContent = text;
-            
-            messagesContainer.appendChild(systemMessage);
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        }
-        
-        // 更新连接状态
-        function updateConnectionStatus(status) {
-            const statusDot = document.getElementById('statusDot');
-            const statusText = document.getElementById('statusText');
-            
-            if (status === 'connected') {
-                statusDot.className = 'status-dot connected';
-                statusText.textContent = translations[currentLang].connected;
-            } else if (status === 'connecting') {
-                statusDot.className = 'status-dot disconnected';
-                statusText.textContent = translations[currentLang].connecting;
-            } else {
-                statusDot.className = 'status-dot disconnected';
-                statusText.textContent = translations[currentLang].disconnected;
-            }
-        }
-        
-        // 切换语言
-        function switchLanguage(lang) {
-            currentLang = lang;
-            
-            // 更新语言按钮状态
-            document.getElementById('langZh').classList.toggle('active', lang === 'zh');
-            document.getElementById('langEn').classList.toggle('active', lang === 'en');
-            
-            // 更新界面文本
-            updateUIForLanguage();
-            
-            // 更新用户列表
-            updateUserListUI();
-        }
-        
-        // 更新界面文本
-        function updateUIForLanguage() {
-            document.getElementById('chatroomTitle').textContent = translations[currentLang].title;
-            document.getElementById('welcomeText').textContent = translations[currentLang].welcome;
-            document.getElementById('warningText').textContent = translations[currentLang].warning;
-            document.getElementById('onlineUsersTitle').innerHTML = `${translations[currentLang].onlineUsers} (<span id="onlineCount">0</span>)`;
-            document.getElementById('messageInput').placeholder = translations[currentLang].placeholder;
-            document.getElementById('sendText').textContent = translations[currentLang].send;
-            document.getElementById('chatTitle').textContent = translations[currentLang].chatTitle;
-        }
-        
-        // 切换移动端侧边栏
-        function toggleSidebar() {
-            const sidebar = document.getElementById('sidebar');
-            sidebar.classList.toggle('active');
-            
-            // 点击侧边栏外部关闭侧边栏
-            if (sidebar.classList.contains('active')) {
-                setTimeout(() => {
-                    document.addEventListener('click', closeSidebarOnClickOutside);
-                }, 10);
-            } else {
-                document.removeEventListener('click', closeSidebarOnClickOutside);
-            }
-        }
-        
-        // 点击侧边栏外部关闭
-        function closeSidebarOnClickOutside(event) {
-            const sidebar = document.getElementById('sidebar');
-            const mobileToggle = document.getElementById('mobileToggle');
-            
-            if (!sidebar.contains(event.target) && event.target !== mobileToggle && !mobileToggle.contains(event.target)) {
-                sidebar.classList.remove('active');
-                document.removeEventListener('click', closeSidebarOnClickOutside);
-            }
-        }
-        
-        // 调整移动端输入框位置
-        function adjustInputPositionForMobile() {
-            if (window.innerWidth <= 768) {
-                const messagesContainer = document.querySelector('.messages-container');
-                if (messagesContainer) {
-                    messagesContainer.style.paddingBottom = '80px';
-                }
-            }
-        }
-        
-        // 页面退出时清理
-        async function cleanupOnExit() {
-            try {
-                // 从在线用户表中删除当前用户
-                const query = new AV.Query('OnlineUser');
-                query.equalTo('userId', currentUser.id);
-                const result = await query.first();
-                
-                if (result) {
-                    await result.destroy();
-                }
-                
-            } catch (error) {
-                console.error('清理用户状态失败:', error);
-            }
-        }
-        
-        // 辅助函数：转义HTML
         function escapeHtml(text) {
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
         }
         
-        // 尝试从localStorage加载配置
-        function loadConfigFromStorage() {
-            try {
-                const savedConfig = localStorage.getItem('leancloudConfig');
-                if (savedConfig) {
-                    const config = JSON.parse(savedConfig);
-                    Object.assign(LEANCLOUD_CONFIG, config);
-                }
-            } catch (error) {
-                console.error('加载配置失败:', error);
-            }
-        }
+        // ===================== 调试函数 =====================
         
-        // 页面加载时尝试加载配置
-        loadConfigFromStorage();
+        window.checkConnection = async function() {
+            const connected = await testConnection();
+            if (connected) {
+                await loadMessages();
+            }
+        };
+        
+        window.clearLocalData = function() {
+            localStorage.removeItem('chatUserId');
+            localStorage.removeItem('chatUsername');
+            location.reload();
+        };
+        
+        // 添加键盘支持
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
     </script>
 </body>
 </html>
