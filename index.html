@@ -374,9 +374,9 @@
         // 配置 - 使用您提供的配置
         const CONFIG = {
             appId: 'x1C7t7inH9TDv1Ku9msDyOWi-MdYXbMMI',
-            appKey: 'KLfByl3kEn1BSfhqgu3WWjDk',
+            appKey: 'KLfByl3kEn1BSfhqgu3WWjDk'
             // 对于国内节点，需要指定serverURL
-            serverURL: 'https://x1c7t7in.lc-cn-n1-shared.com'
+            
         };
         
         // 当前用户
@@ -408,7 +408,7 @@
             
             // 显示连接详情
             document.getElementById('connectionDetails').textContent = 
-                `App ID: ${CONFIG.appId.substring(0, 8)}... | Server: ${CONFIG.serverURL}`;
+                `App ID: ${CONFIG.appId.substring(0, 8)}`;
             
             // 启动应用
             initApp();
@@ -425,8 +425,7 @@
                 // 初始化LeanCloud - 国内节点必须指定serverURL
                 AV.init({
                     appId: CONFIG.appId,
-                    appKey: CONFIG.appKey,
-                    serverURL: CONFIG.serverURL  // 国内节点必须指定
+                    appKey: CONFIG.appKey                
                 });
                 
                 console.log('LeanCloud SDK初始化成功');
@@ -541,8 +540,7 @@
                             <div style="background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0;">
                                 <strong>当前配置：</strong><br>
                                 App ID: ${CONFIG.appId}<br>
-                                Server: ${CONFIG.serverURL}
-                            </div>
+                                                            </div>
                             <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
                                 重新加载
                             </button>
@@ -896,8 +894,7 @@
                     <div style="background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0;">
                         <strong>当前配置：</strong><br>
                         App ID: ${CONFIG.appId}<br>
-                        App Key: ${CONFIG.appKey}<br>
-                        Server URL: ${CONFIG.serverURL}
+                        App Key: ${CONFIG.appKey}<br>                      
                     </div>
                     <p>请检查：</p>
                     <ol style="text-align: left; max-width: 500px; margin: 20px auto;">
