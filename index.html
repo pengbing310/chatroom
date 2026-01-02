@@ -7,8 +7,9 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.13.2/dist/av-min.js"></script>
     <style>
-        /* ... 保持原有样式不变，添加一些新样式 ... */
+        /* ... 保持原有样式不变 ... */
         
+        /* 新增的服务器选择样式 */
         .server-selector {
             background: white;
             border: 1px solid var(--border-color);
@@ -47,11 +48,20 @@
             color: #666;
         }
         
+        .server-option .server-address {
+            font-family: monospace;
+            font-size: 12px;
+            color: var(--primary-color);
+            margin-top: 5px;
+            word-break: break-all;
+        }
+        
         .retry-buttons {
             display: flex;
             gap: 10px;
             margin-top: 20px;
             justify-content: center;
+            flex-wrap: wrap;
         }
         
         .retry-buttons button {
@@ -60,6 +70,7 @@
             cursor: pointer;
             font-weight: bold;
             border: none;
+            min-width: 140px;
         }
         
         .retry-buttons .primary-btn {
@@ -72,41 +83,146 @@
             color: var(--dark-color);
             border: 1px solid var(--border-color);
         }
+        
+        .retry-buttons .danger-btn {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        
+        /* 新增代理提示样式 */
+        .proxy-warning {
+            background: #ffeaa7;
+            border: 1px solid #fdcb6e;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            text-align: left;
+        }
+        
+        .proxy-warning h4 {
+            margin: 0 0 8px 0;
+            color: #e17055;
+        }
+        
+        .proxy-warning ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .proxy-warning li {
+            margin-bottom: 5px;
+        }
     </style>
 </head>
 <body>
     <div id="app">
         <!-- 侧边栏 -->
-        <!-- ... 保持原有侧边栏结构不变 ... -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>匿名聊天室</h2>
+                <p>欢迎！请勿透露个人信息</p>
+            </div>
+            
+            <div class="user-info">
+                <div class="user-avatar" id="userAvatar">?</div>
+                <div>
+                    <div id="userName">连接中...</div>
+                    <div id="userId" style="font-size: 12px; color: #666;">ID: 连接中...</div>
+                </div>
+            </div>
+            
+            <div class="warning-box">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>匿名聊天室，请勿透露任何个人信息</span>
+            </div>
+            
+            <div class="user-list-container">
+                <h3>在线用户 (<span id="onlineCount">0</span>)</h3>
+                <ul class="user-list" id="userList">
+                    <div class="loading" id="userListLoading">
+                        <div class="spinner"></div>
+                        <div>加载用户列表...</div>
+                    </div>
+                </ul>
+            </div>
+        </div>
+        
+        <!-- 聊天区域 -->
+        <div class="chat-area">
+            <div class="chat-header">
+                <h2>公共聊天室</h2>
+                <div class="status">
+                    <span class="status-dot" id="statusDot"></span>
+                    <span id="statusText">连接中...</span>
+                </div>
+            </div>
+            
+            <div class="messages" id="messages">
+                <div class="loading" id="messagesLoading">
+                    <div class="spinner"></div>
+                    <div id="loadingText">正在初始化聊天室...</div>
+                </div>
+            </div>
+            
+            <div class="input-area">
+                <input type="text" id="messageInput" placeholder="连接中..." maxlength="500" disabled>
+                <button id="sendButton" disabled>
+                    <i class="fas fa-paper-plane"></i>
+                    <span>发送</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 移动端切换按钮 -->
+        <button class="mobile-toggle" id="mobileToggle">
+            <i class="fas fa-users"></i>
+        </button>
     </div>
 
     <script>
-        // 配置 - 保持原有的国际版配置
+        // 配置
         const CONFIG = {
-            // 国际版配置（需要代理）
             appId: 'x1C7t7inH9TDv1Ku9msDyOWi-MdYXbMMI',
             appKey: 'KLfByl3kEn1BSfhqgu3WWjDk'
         };
         
-        // 国内版服务器配置
-        const CN_SERVERS = {
-            // 华北节点（推荐）
-            '华北': {
-                serverURLs: 'https://x1c7t7in.lc-cn-n1-shared.com',
-                description: '华北节点，中国大陆访问速度最快'
+        // 服务器配置（包括您提供的域名）
+        const SERVER_CONFIGS = {
+            // 默认国际版（需要代理）
+            'default': {
+                name: '默认国际版',
+                description: '全球通用服务器，中国大陆用户可能需要科学上网',
+                needProxy: true,
+                serverURLs: '' // 默认不指定，使用LeanCloud默认服务器
             },
-            // 华东节点
-            '华东': {
-                serverURLs: 'https://x1c7t7in.lc-cn-e1-shared.com',
-                description: '华东节点，适合华东地区用户'
+            // 您提供的国际版域名
+            'global_usw1': {
+                name: '国际版 - 美国西部1区',
+                description: '美国西部服务器，中国大陆用户需要科学上网',
+                needProxy: true,
+                serverURLs: 'https://x1c7t7in.im.us-w1.lncldglobal.com'
+            },
+            // 国内版配置（无需代理）
+            'cn_north': {
+                name: '国内版 - 华北节点',
+                description: '中国大陆服务器，无需代理，速度快',
+                needProxy: false,
+                serverURLs: 'https://x1c7t7in.lc-cn-n1-shared.com'
+            },
+            'cn_east': {
+                name: '国内版 - 华东节点',
+                description: '中国大陆服务器，无需代理',
+                needProxy: false,
+                serverURLs: 'https://x1c7t7in.lc-cn-e1-shared.com'
             }
         };
         
         // 当前配置
         let CURRENT_CONFIG = {
             ...CONFIG,
-            serverURLs: '', // 默认为空（使用国际版）
-            useCN: false // 是否使用国内版
+            serverType: 'default', // 默认服务器类型
+            serverURLs: '', // 服务器地址
+            needProxy: true // 是否需要代理
         };
         
         // 当前用户
@@ -151,10 +267,11 @@
                 const preferences = localStorage.getItem('chatPreferences');
                 if (preferences) {
                     const pref = JSON.parse(preferences);
-                    if (pref.useCN && pref.serverRegion) {
-                        CURRENT_CONFIG.useCN = true;
-                        CURRENT_CONFIG.serverURLs = CN_SERVERS[pref.serverRegion].serverURLs;
-                        console.log('加载用户偏好：使用国内版', pref.serverRegion);
+                    if (pref.serverType && SERVER_CONFIGS[pref.serverType]) {
+                        CURRENT_CONFIG.serverType = pref.serverType;
+                        CURRENT_CONFIG.serverURLs = SERVER_CONFIGS[pref.serverType].serverURLs;
+                        CURRENT_CONFIG.needProxy = SERVER_CONFIGS[pref.serverType].needProxy;
+                        console.log('加载用户偏好：使用服务器', pref.serverType);
                     }
                 }
             } catch (e) {
@@ -163,10 +280,9 @@
         }
         
         // 保存用户偏好设置
-        function saveUserPreferences(useCN, serverRegion) {
+        function saveUserPreferences(serverType) {
             const preferences = {
-                useCN: useCN,
-                serverRegion: serverRegion
+                serverType: serverType
             };
             localStorage.setItem('chatPreferences', JSON.stringify(preferences));
         }
@@ -182,43 +298,69 @@
                         <p>请根据您的网络环境选择服务器节点：</p>
                         
                         <div class="server-selector" id="serverOptions">
-                            <div class="server-option" data-server="international" onclick="selectServer('international')">
-                                <h4>🌍 国际版服务器</h4>
-                                <p>全球通用，但中国大陆用户可能需要科学上网</p>
-                                <div style="margin-top: 8px; font-size: 12px; color: var(--primary-color);">
-                                    <i class="fas fa-globe"></i> 推荐海外用户使用
+                            <!-- 默认国际版 -->
+                            <div class="server-option" data-server="default" onclick="selectServer('default')">
+                                <h4>🌍 ${SERVER_CONFIGS.default.name}</h4>
+                                <p>${SERVER_CONFIGS.default.description}</p>
+                                <div class="server-address">
+                                    使用默认API服务器
                                 </div>
+                                ${CURRENT_CONFIG.serverType === 'default' ? '<div style="color: var(--secondary-color); margin-top: 5px;">✓ 当前选择</div>' : ''}
                             </div>
                             
-                            <div class="server-option" data-server="华北" onclick="selectServer('华北')">
-                                <h4>🇨🇳 国内版 - 华北节点</h4>
-                                <p>中国大陆访问，无需代理，速度快</p>
-                                <div style="margin-top: 8px; font-size: 12px; color: var(--secondary-color);">
-                                    <i class="fas fa-bolt"></i> 推荐中国大陆用户使用
+                            <!-- 您提供的国际版域名 -->
+                            <div class="server-option" data-server="global_usw1" onclick="selectServer('global_usw1')">
+                                <h4>🇺🇸 ${SERVER_CONFIGS.global_usw1.name}</h4>
+                                <p>${SERVER_CONFIGS.global_usw1.description}</p>
+                                <div class="server-address">
+                                    ${SERVER_CONFIGS.global_usw1.serverURLs}
                                 </div>
+                                ${CURRENT_CONFIG.serverType === 'global_usw1' ? '<div style="color: var(--secondary-color); margin-top: 5px;">✓ 当前选择</div>' : ''}
                             </div>
                             
-                            <div class="server-option" data-server="华东" onclick="selectServer('华东')">
-                                <h4>🇨🇳 国内版 - 华东节点</h4>
-                                <p>中国大陆访问，适合华东地区用户</p>
-                                <div style="margin-top: 8px; font-size: 12px; color: var(--secondary-color);">
-                                    <i class="fas fa-map-marker-alt"></i> 推荐华东地区用户
+                            <!-- 国内版选项 -->
+                            <div class="server-option" data-server="cn_north" onclick="selectServer('cn_north')">
+                                <h4>🇨🇳 ${SERVER_CONFIGS.cn_north.name}</h4>
+                                <p>${SERVER_CONFIGS.cn_north.description}</p>
+                                <div class="server-address">
+                                    ${SERVER_CONFIGS.cn_north.serverURLs}
                                 </div>
+                                ${CURRENT_CONFIG.serverType === 'cn_north' ? '<div style="color: var(--secondary-color); margin-top: 5px;">✓ 当前选择</div>' : ''}
+                            </div>
+                            
+                            <div class="server-option" data-server="cn_east" onclick="selectServer('cn_east')">
+                                <h4>🇨🇳 ${SERVER_CONFIGS.cn_east.name}</h4>
+                                <p>${SERVER_CONFIGS.cn_east.description}</p>
+                                <div class="server-address">
+                                    ${SERVER_CONFIGS.cn_east.serverURLs}
+                                </div>
+                                ${CURRENT_CONFIG.serverType === 'cn_east' ? '<div style="color: var(--secondary-color); margin-top: 5px;">✓ 当前选择</div>' : ''}
                             </div>
                         </div>
                         
+                        <!-- 代理提示 -->
+                        <div class="proxy-warning" id="proxyWarning" style="display: none;">
+                            <h4><i class="fas fa-exclamation-triangle"></i> 代理提示</h4>
+                            <p>您选择了<strong>国际版服务器</strong>，在中国大陆访问可能需要：</p>
+                            <ul>
+                                <li>开启科学上网/ VPN</li>
+                                <li>使用代理服务器</li>
+                                <li>或者切换为<strong>国内版服务器</strong></li>
+                            </ul>
+                        </div>
+                        
                         <div class="config-steps" style="margin-top: 25px;">
-                            <h4>⚠️ 重要提示：</h4>
+                            <h4>📝 选择建议：</h4>
                             <ul style="text-align: left; margin: 15px auto; max-width: 600px;">
-                                <li><strong>中国大陆用户</strong>：请选择「国内版」节点，无需代理即可访问</li>
-                                <li><strong>海外用户</strong>：请选择「国际版」服务器</li>
+                                <li><strong>中国大陆用户</strong>：请选择「国内版」节点，无需代理</li>
+                                <li><strong>海外用户</strong>：可选择任意「国际版」服务器</li>
                                 <li>如果连接失败，请尝试切换其他节点</li>
-                                <li>国内版需要正确配置安全域名，请确保已在 LeanCloud 控制台配置</li>
+                                <li>请确保已在 LeanCloud 控制台配置安全域名</li>
                             </ul>
                             
                             <div style="background: #fff3cd; padding: 15px; border-radius: 8px; margin: 20px 0;">
                                 <h5><i class="fas fa-exclamation-circle"></i> 安全域名配置：</h5>
-                                <p>无论选择哪个节点，都需要在 LeanCloud 控制台配置安全域名：</p>
+                                <p>无论选择哪个服务器，都需要在 LeanCloud 控制台配置安全域名：</p>
                                 <div style="font-family: monospace; background: white; padding: 10px; margin: 10px 0; border-radius: 5px;">
                                     1. localhost<br>
                                     2. 127.0.0.1<br>
@@ -242,8 +384,8 @@
                 </div>
             `;
             
-            // 默认选择国际版
-            selectServer('international');
+            // 初始选择当前配置
+            selectServer(CURRENT_CONFIG.serverType);
         }
         
         // 选择服务器
@@ -260,16 +402,17 @@
             }
             
             // 更新当前配置
-            if (serverType === 'international') {
-                CURRENT_CONFIG.useCN = false;
-                CURRENT_CONFIG.serverURLs = '';
-            } else {
-                CURRENT_CONFIG.useCN = true;
-                CURRENT_CONFIG.serverURLs = CN_SERVERS[serverType].serverURLs;
-                CURRENT_CONFIG.serverRegion = serverType;
-            }
+            CURRENT_CONFIG.serverType = serverType;
+            CURRENT_CONFIG.serverURLs = SERVER_CONFIGS[serverType].serverURLs;
+            CURRENT_CONFIG.needProxy = SERVER_CONFIGS[serverType].needProxy;
             
-            console.log('选择服务器:', serverType, CURRENT_CONFIG);
+            console.log('选择服务器:', serverType, '地址:', CURRENT_CONFIG.serverURLs);
+            
+            // 显示/隐藏代理提示
+            const proxyWarning = document.getElementById('proxyWarning');
+            if (proxyWarning) {
+                proxyWarning.style.display = CURRENT_CONFIG.needProxy ? 'block' : 'none';
+            }
         }
         
         // 使用选择的服务器连接
@@ -279,18 +422,14 @@
             connectBtn.disabled = true;
             
             // 保存用户偏好
-            if (CURRENT_CONFIG.useCN && CURRENT_CONFIG.serverRegion) {
-                saveUserPreferences(true, CURRENT_CONFIG.serverRegion);
-            } else {
-                saveUserPreferences(false, null);
-            }
+            saveUserPreferences(CURRENT_CONFIG.serverType);
             
             // 重新初始化应用
             setTimeout(() => {
                 document.getElementById('messages').innerHTML = `
                     <div class="loading">
                         <div class="spinner"></div>
-                        <div>正在连接${CURRENT_CONFIG.useCN ? '国内版' : '国际版'}服务器...</div>
+                        <div>正在连接${SERVER_CONFIGS[CURRENT_CONFIG.serverType].name}...</div>
                     </div>
                 `;
                 initApp();
@@ -300,13 +439,20 @@
         // 初始化应用
         async function initApp() {
             try {
+                // 如果是第一次访问或连接失败，显示服务器选择界面
+                const firstVisit = !localStorage.getItem('chatPreferences');
+                if (firstVisit || retryCount > 0) {
+                    showServerSelector();
+                    updateStatus('选择服务器');
+                    return;
+                }
+                
                 updateStatus('正在初始化...');
                 updateLoadingText('正在初始化聊天室...');
                 
                 // 显示连接信息
-                const serverType = CURRENT_CONFIG.useCN ? 
-                    `国内版（${CURRENT_CONFIG.serverRegion}）` : '国际版';
-                console.log(`使用${serverType}服务器连接`);
+                const serverInfo = SERVER_CONFIGS[CURRENT_CONFIG.serverType];
+                console.log(`使用${serverInfo.name}连接，地址: ${CURRENT_CONFIG.serverURLs || '默认'}`);
                 
                 // 初始化LeanCloud
                 const initOptions = {
@@ -314,10 +460,10 @@
                     appKey: CURRENT_CONFIG.appKey
                 };
                 
-                // 如果使用国内版，添加服务器地址
-                if (CURRENT_CONFIG.useCN && CURRENT_CONFIG.serverURLs) {
+                // 如果指定了服务器地址，添加配置
+                if (CURRENT_CONFIG.serverURLs) {
                     initOptions.serverURLs = CURRENT_CONFIG.serverURLs;
-                    console.log('使用国内版服务器:', CURRENT_CONFIG.serverURLs);
+                    console.log('使用自定义服务器地址:', CURRENT_CONFIG.serverURLs);
                 }
                 
                 AV.init(initOptions);
@@ -329,7 +475,7 @@
                 
                 // 测试连接
                 updateStatus('正在连接...');
-                updateLoadingText(`正在连接到${serverType}服务器...`);
+                updateLoadingText(`正在连接到${serverInfo.name}...`);
                 const connected = await testConnection();
                 
                 if (connected) {
@@ -359,7 +505,42 @@
                     // 重置重试计数
                     retryCount = 0;
                 } else {
-                    throw new Error(`无法连接到${serverType}服务器`);
+                    // 连接失败，显示服务器选择
+                    showServerSelector();
+                    updateStatus('连接失败');
+                    
+                    // 根据是否需要代理给出不同提示
+                    const messagesContainer = document.getElementById('messages');
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error';
+                    errorDiv.style.padding = '20px';
+                    
+                    if (CURRENT_CONFIG.needProxy) {
+                        errorDiv.innerHTML = `
+                            <h3><i class="fas fa-globe-americas"></i> 国际版连接失败</h3>
+                            <p>无法连接到国际版服务器，这可能是因为：</p>
+                            <div class="proxy-warning" style="margin: 15px 0;">
+                                <h4>解决方案：</h4>
+                                <ul>
+                                    <li>如果您在中国大陆，请开启代理/VPN</li>
+                                    <li>或者切换到<strong>国内版服务器</strong></li>
+                                    <li>检查网络连接</li>
+                                </ul>
+                            </div>
+                        `;
+                    } else {
+                        errorDiv.innerHTML = `
+                            <h3><i class="fas fa-server"></i> 国内版连接失败</h3>
+                            <p>无法连接到国内版服务器，这可能是因为：</p>
+                            <ul style="text-align: left; margin: 15px auto; max-width: 500px;">
+                                <li>服务器地址配置错误</li>
+                                <li>安全域名未正确配置</li>
+                                <li>网络连接问题</li>
+                            </ul>
+                        `;
+                    }
+                    
+                    messagesContainer.insertBefore(errorDiv, messagesContainer.firstChild);
                 }
                 
             } catch (error) {
@@ -389,7 +570,12 @@
                     // 检查错误类型
                     if (queryError.message.includes('401') || queryError.message.includes('Unauthorized')) {
                         console.log('认证失败，可能是安全域名问题');
-                        // 仍然尝试创建表
+                        return false;
+                    }
+                    
+                    if (queryError.message.includes('Network') || queryError.message.includes('timeout')) {
+                        console.log('网络连接失败');
+                        return false;
                     }
                     
                     // 尝试创建一条消息
@@ -406,12 +592,6 @@
                 
             } catch (error) {
                 console.error('连接测试失败:', error);
-                
-                // 检查是否是网络问题
-                if (error.message.includes('Network') || error.message.includes('timeout')) {
-                    console.log('网络连接失败，可能是服务器地址错误或需要代理');
-                }
-                
                 return false;
             }
         }
@@ -419,106 +599,26 @@
         // 处理初始化错误
         function handleInitError(error) {
             const messagesContainer = document.getElementById('messages');
-            const serverType = CURRENT_CONFIG.useCN ? '国内版' : '国际版';
+            const serverInfo = SERVER_CONFIGS[CURRENT_CONFIG.serverType];
             
             // 增加重试计数
             retryCount++;
             
-            if (retryCount < MAX_RETRY_COUNT) {
-                // 显示重试界面
-                messagesContainer.innerHTML = `
-                    <div class="error">
-                        <h3>连接失败</h3>
-                        <p>无法连接到${serverType}服务器 (尝试 ${retryCount}/${MAX_RETRY_COUNT})</p>
-                        
-                        <div style="margin: 20px 0; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-                            <h4>可能的原因：</h4>
-                            <ul style="text-align: left; margin: 10px auto; max-width: 500px;">
-                                <li>${CURRENT_CONFIG.useCN ? '国内版服务器地址配置错误' : '国际版需要科学上网'}</li>
-                                <li>LeanCloud 安全域名未配置</li>
-                                <li>网络连接问题</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="retry-buttons">
-                            <button class="primary-btn" onclick="retryConnection()">
-                                <i class="fas fa-redo"></i> 重试连接
-                            </button>
-                            <button class="secondary-btn" onclick="showServerSelector()">
-                                <i class="fas fa-exchange-alt"></i> 切换服务器
-                            </button>
-                            <button class="secondary-btn" onclick="location.reload()">
-                                <i class="fas fa-sync"></i> 刷新页面
-                            </button>
-                        </div>
-                        
-                        <div style="margin-top: 25px; font-size: 14px; color: #666;">
-                            <p><strong>提示：</strong> 中国大陆用户请选择「国内版」服务器</p>
-                            <p>海外用户请选择「国际版」服务器</p>
-                        </div>
-                    </div>
-                `;
-            } else {
-                // 达到最大重试次数，显示详细帮助
-                messagesContainer.innerHTML = `
-                    <div class="error">
-                        <h3>连接失败</h3>
-                        <p>多次尝试连接${serverType}服务器失败</p>
-                        
-                        <div class="config-help">
-                            <h3>🔧 解决方案：</h3>
-                            
-                            <div style="margin: 20px 0;">
-                                <h4>${CURRENT_CONFIG.useCN ? '国内版连接问题：' : '国际版连接问题：'}</h4>
-                                ${CURRENT_CONFIG.useCN ? `
-                                    <ol>
-                                        <li>检查服务器地址是否正确：
-                                            <div style="background: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 5px; font-family: monospace;">
-                                                ${CURRENT_CONFIG.serverURLs || '未配置服务器地址'}
-                                            </div>
-                                        </li>
-                                        <li>确保已在 LeanCloud 控制台配置安全域名</li>
-                                        <li>国内版应用需要在「设置」→「应用凭证」中查看正确的服务器地址</li>
-                                    </ol>
-                                ` : `
-                                    <ol>
-                                        <li>国际版在中国大陆可能需要科学上网</li>
-                                        <li>或者切换为国内版服务器</li>
-                                        <li>确保已在 LeanCloud 控制台配置安全域名</li>
-                                    </ol>
-                                `}
-                            </div>
-                            
-                            <div style="background: #e8f4fc; padding: 15px; border-radius: 8px; margin: 20px 0;">
-                                <h5><i class="fas fa-cogs"></i> 安全域名配置步骤：</h5>
-                                <ol style="text-align: left;">
-                                    <li>访问 <a href="https://console.leancloud.app/" target="_blank">LeanCloud 控制台</a></li>
-                                    <li>进入您的应用</li>
-                                    <li>点击「设置」→「安全中心」</li>
-                                    <li>在「Web 安全域名」中添加：
-                                        <div style="background: white; padding: 10px; margin: 10px 0; border-radius: 5px; font-family: monospace;">
-                                            localhost<br>
-                                            127.0.0.1<br>
-                                            ${window.location.hostname || '您的域名/IP'}<br>
-                                            * (允许所有域名，仅测试用)
-                                        </div>
-                                    </li>
-                                    <li>点击「保存」</li>
-                                </ol>
-                            </div>
-                            
-                            <div class="retry-buttons">
-                                <button class="primary-btn" onclick="showServerSelector()">
-                                    <i class="fas fa-exchange-alt"></i> 切换服务器节点
-                                </button>
-                                <button class="secondary-btn" onclick="location.reload()">
-                                    <i class="fas fa-sync"></i> 刷新页面
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                `;
-            }
+            // 显示服务器选择界面和错误信息
+            showServerSelector();
+            
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.style.padding = '20px';
+            errorDiv.style.marginBottom = '20px';
+            
+            errorDiv.innerHTML = `
+                <h3><i class="fas fa-exclamation-triangle"></i> 连接失败</h3>
+                <p>无法连接到${serverInfo.name} (尝试 ${retryCount}/${MAX_RETRY_COUNT})</p>
+                <p style="color: #666; font-size: 14px;">${error.message || '网络连接错误'}</p>
+            `;
+            
+            messagesContainer.insertBefore(errorDiv, messagesContainer.firstChild);
         }
         
         // 重试连接
@@ -533,27 +633,386 @@
             initApp();
         }
         
-        // ... 其他函数保持不变（initUser, loadData, sendMessage等）...
-        // 注意：需要保持原有的 initUser, updateLoadingText, loadData, sendMessage 等函数
+        // 更新加载文本
+        function updateLoadingText(text) {
+            const loadingText = document.getElementById('loadingText');
+            if (loadingText) {
+                loadingText.textContent = text;
+            }
+        }
         
-        // 在 initApp 开始时添加检查
-        // 修改原来的 initApp 函数开头部分：
-        // 初始化应用
-        async function initApp() {
+        // 初始化用户
+        function initUser() {
+            return new Promise((resolve) => {
+                // 从本地存储获取或创建用户
+                let userId = localStorage.getItem('chatUserId');
+                let userName = localStorage.getItem('chatUserName');
+                
+                if (!userId) {
+                    userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    localStorage.setItem('chatUserId', userId);
+                }
+                
+                if (!userName) {
+                    const names = ['甲', '乙', '丙', '丁', '小明', '小红', '小刚', '张三', '李四', '王五'];
+                    userName = names[Math.floor(Math.random() * names.length)];
+                    localStorage.setItem('chatUserName', userName);
+                }
+                
+                currentUser = {
+                    id: userId,
+                    name: userName,
+                    avatar: userName.charAt(0)
+                };
+                
+                // 更新界面
+                document.getElementById('userAvatar').textContent = currentUser.avatar;
+                document.getElementById('userName').textContent = currentUser.name;
+                document.getElementById('userId').textContent = 'ID: ' + currentUser.id.substring(0, 12) + '...';
+                
+                console.log('用户初始化完成:', currentUser.name);
+                resolve();
+            });
+        }
+        
+        // 加载数据
+        async function loadData() {
             try {
-                // 如果是第一次访问，显示服务器选择界面
-                const firstVisit = !localStorage.getItem('chatPreferences');
-                if (firstVisit) {
-                    showServerSelector();
-                    updateStatus('选择服务器');
+                console.log('开始加载数据...');
+                updateLoadingText('正在加载历史消息...');
+                
+                // 加载消息
+                await loadMessages();
+                
+                // 加载用户列表
+                await loadUserList();
+                
+            } catch (error) {
+                console.error('加载数据失败:', error);
+                throw error;
+            }
+        }
+        
+        // 加载消息
+        async function loadMessages() {
+            try {
+                console.log('查询消息...');
+                
+                const query = new AV.Query('ChatMessage');
+                query.descending('createdAt');
+                query.limit(50);
+                
+                const messages = await query.find();
+                console.log('获取到消息数量:', messages.length);
+                
+                // 隐藏加载状态
+                const messagesContainer = document.getElementById('messages');
+                messagesContainer.innerHTML = '';
+                
+                if (messages.length === 0) {
+                    showEmptyMessages();
+                    lastMessageTime = new Date(0);
                     return;
                 }
                 
-                updateStatus('正在初始化...');
-                // ... 其余代码保持不变 ...
+                // 记录最后一条消息的时间
+                lastMessageTime = messages[0].createdAt;
+                
+                // 显示消息（按时间正序）
+                messages.reverse().forEach(msg => {
+                    addMessageToUI(msg, false);
+                });
+                
+                // 滚动到底部
+                scrollToBottom();
+                
             } catch (error) {
-                // ... 错误处理保持不变 ...
+                console.error('加载消息失败:', error);
+                const messagesContainer = document.getElementById('messages');
+                messagesContainer.innerHTML = `
+                    <div class="error">
+                        <p>加载消息失败: ${error.message}</p>
+                        <div class="retry-buttons">
+                            <button class="primary-btn" onclick="showServerSelector()">
+                                切换服务器
+                            </button>
+                            <button class="secondary-btn" onclick="location.reload()">
+                                刷新页面
+                            </button>
+                        </div>
+                    </div>
+                `;
             }
+        }
+        
+        // 加载用户列表
+        async function loadUserList() {
+            try {
+                console.log('加载用户列表...');
+                
+                // 从消息中提取用户
+                const query = new AV.Query('ChatMessage');
+                query.descending('createdAt');
+                query.limit(100);
+                
+                const messages = await query.find();
+                console.log('获取消息用于提取用户:', messages.length);
+                
+                const users = {};
+                
+                // 收集用户
+                messages.forEach(msg => {
+                    const userId = msg.get('userId');
+                    const userName = msg.get('username');
+                    if (userId && userName) {
+                        users[userId] = userName;
+                    }
+                });
+                
+                // 添加当前用户
+                users[currentUser.id] = currentUser.name;
+                
+                console.log('收集到的用户:', Object.keys(users).length);
+                
+                // 更新用户列表
+                updateUserListUI(users);
+                
+            } catch (error) {
+                console.error('加载用户列表失败:', error);
+                const userListLoading = document.getElementById('userListLoading');
+                if (userListLoading) {
+                    userListLoading.innerHTML = '<div>加载用户列表失败</div>';
+                }
+            }
+        }
+        
+        // 更新用户列表UI
+        function updateUserListUI(users) {
+            const userList = document.getElementById('userList');
+            const onlineCount = document.getElementById('onlineCount');
+            const userListLoading = document.getElementById('userListLoading');
+            
+            // 隐藏加载状态
+            if (userListLoading) {
+                userListLoading.style.display = 'none';
+            }
+            
+            // 更新在线人数
+            onlineCount.textContent = Object.keys(users).length;
+            
+            // 清空列表
+            userList.innerHTML = '';
+            
+            // 添加用户
+            Object.entries(users).forEach(([userId, userName]) => {
+                const li = document.createElement('li');
+                li.textContent = userName + (userId === currentUser.id ? ' (你)' : '');
+                userList.appendChild(li);
+            });
+            
+            console.log('用户列表更新完成');
+        }
+        
+        // 发送消息
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const text = input.value.trim();
+            
+            if (!text) return;
+            
+            try {
+                // 禁用发送按钮
+                document.getElementById('sendButton').disabled = true;
+                
+                console.log('发送消息:', text);
+                
+                // 创建消息对象
+                const ChatMessage = AV.Object.extend('ChatMessage');
+                const message = new ChatMessage();
+                
+                message.set('userId', currentUser.id);
+                message.set('username', currentUser.name);
+                message.set('content', text);
+                
+                // 保存
+                const savedMessage = await message.save();
+                console.log('消息保存成功:', savedMessage.id);
+                
+                // 添加到界面
+                addMessageToUI(savedMessage, true);
+                
+                // 清空输入框
+                input.value = '';
+                
+                // 电脑端自动聚焦
+                if (window.innerWidth > 768) {
+                    input.focus();
+                }
+                
+                // 更新最后消息时间
+                lastMessageTime = savedMessage.createdAt;
+                
+                // 更新用户列表
+                updateCurrentUserInList();
+                
+            } catch (error) {
+                console.error('发送消息失败:', error);
+                alert('发送失败，请检查网络连接');
+                
+                // 检查是否是代理问题
+                if (error.message.includes('Network') || error.message.includes('timeout')) {
+                    if (CURRENT_CONFIG.needProxy) {
+                        if (confirm('发送失败，可能是代理连接问题。是否要切换到国内版服务器？')) {
+                            selectServer('cn_north');
+                            connectWithSelectedServer();
+                        }
+                    }
+                }
+            } finally {
+                // 重新启用发送按钮
+                document.getElementById('sendButton').disabled = false;
+            }
+        }
+        
+        // 添加消息到界面
+        function addMessageToUI(messageObj, scrollToBottom = true) {
+            const messagesContainer = document.getElementById('messages');
+            
+            // 移除空状态
+            const emptyState = document.getElementById('emptyMessagesState');
+            if (emptyState) {
+                emptyState.remove();
+            }
+            
+            const messageDiv = document.createElement('div');
+            const isSelf = messageObj.get('userId') === currentUser.id;
+            messageDiv.className = `message ${isSelf ? 'self' : ''}`;
+            
+            const time = messageObj.createdAt.toLocaleTimeString([], { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+            });
+            
+            const content = escapeHtml(messageObj.get('content') || '');
+            
+            messageDiv.innerHTML = `
+                <div class="message-header">
+                    <span class="message-sender">${messageObj.get('username')}${isSelf ? ' (你)' : ''}</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-content">${content}</div>
+            `;
+            
+            messagesContainer.appendChild(messageDiv);
+            
+            if (scrollToBottom) {
+                setTimeout(scrollToBottom, 50);
+            }
+        }
+        
+        // 显示空消息状态
+        function showEmptyMessages() {
+            const messagesContainer = document.getElementById('messages');
+            messagesContainer.innerHTML = `
+                <div class="empty-chat" id="emptyMessagesState">
+                    <i class="fas fa-comments" style="font-size: 48px; margin-bottom: 20px; color: #bdc3c7;"></i>
+                    <p>还没有消息，发送第一条消息开始聊天吧！</p>
+                </div>
+            `;
+        }
+        
+        // 更新当前用户在列表中
+        function updateCurrentUserInList() {
+            const userList = document.getElementById('userList');
+            const users = {};
+            
+            // 收集现有用户
+            userList.querySelectorAll('li').forEach(li => {
+                const text = li.textContent.replace(' (你)', '');
+                users[text] = text;
+            });
+            
+            // 添加当前用户
+            users[currentUser.name] = currentUser.name;
+            
+            // 重新渲染列表
+            updateUserListUI(users);
+        }
+        
+        // 开始轮询新消息
+        function startPolling() {
+            // 清理之前的轮询
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+            
+            // 立即检查一次
+            checkNewMessages();
+            
+            // 每3秒检查一次
+            pollingInterval = setInterval(checkNewMessages, 3000);
+        }
+        
+        // 检查新消息
+        async function checkNewMessages() {
+            try {
+                if (!lastMessageTime) return;
+                
+                const query = new AV.Query('ChatMessage');
+                query.greaterThan('createdAt', lastMessageTime);
+                query.ascending('createdAt');
+                
+                const newMessages = await query.find();
+                
+                if (newMessages.length > 0) {
+                    console.log('发现新消息:', newMessages.length);
+                    
+                    newMessages.forEach(msg => {
+                        // 避免重复显示自己刚发的消息
+                        if (msg.get('userId') !== currentUser.id) {
+                            addMessageToUI(msg, true);
+                        }
+                    });
+                    
+                    // 更新最后消息时间
+                    lastMessageTime = newMessages[newMessages.length - 1].createdAt;
+                    
+                    // 更新用户列表
+                    await loadUserList();
+                }
+                
+            } catch (error) {
+                console.error('检查新消息失败:', error);
+            }
+        }
+        
+        // 滚动到底部
+        function scrollToBottom() {
+            const messagesContainer = document.getElementById('messages');
+            if (messagesContainer) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        }
+        
+        // 更新状态
+        function updateStatus(text) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
+            
+            statusText.textContent = text;
+            
+            if (text === '已连接') {
+                statusDot.className = 'status-dot connected';
+            } else {
+                statusDot.className = 'status-dot';
+            }
+        }
+        
+        // HTML转义
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
     </script>
 </body>
