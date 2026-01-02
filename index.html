@@ -238,6 +238,8 @@
             padding: 20px;
             background-color: #fafafa;
             -webkit-overflow-scrolling: touch;
+            display: flex;
+            flex-direction: column;
         }
         
         .message {
@@ -403,6 +405,7 @@
             justify-content: center;
             align-items: center;
             padding: 20px;
+            height: 100%;
         }
         
         .spinner {
@@ -417,30 +420,6 @@
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
-        }
-        
-        /* 调试信息 */
-        .debug-info {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            padding: 10px;
-            margin: 10px 15px;
-            border-radius: 5px;
-            font-size: 14px;
-        }
-        
-        .debug-info h4 {
-            margin: 0 0 8px 0;
-            color: var(--dark-color);
-        }
-        
-        .debug-info pre {
-            background: #fff;
-            padding: 8px;
-            border-radius: 3px;
-            overflow: auto;
-            font-size: 12px;
-            max-height: 100px;
         }
         
         /* 移动端适配 */
@@ -461,6 +440,7 @@
                 z-index: 100;
                 transform: translateY(-100%);
                 transition: transform 0.3s ease;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
             }
             
             .sidebar.active {
@@ -676,12 +656,6 @@
                 </ul>
             </div>
             
-            <!-- 调试信息区域 -->
-            <div class="debug-info" id="debugInfo" style="display: none;">
-                <h4>调试信息</h4>
-                <div id="debugContent"></div>
-            </div>
-            
             <div class="language-switcher">
                 <button class="lang-btn active" id="langZh">中文</button>
                 <button class="lang-btn" id="langEn">English</button>
@@ -779,8 +753,7 @@
         
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', async function() {
-            // 显示调试信息
-            showDebugInfo('页面加载完成，开始初始化...');
+            console.log('页面加载完成，开始初始化...');
             
             // 初始化界面
             updateUIForLanguage();
@@ -812,17 +785,15 @@
         async function initializeLeanCloud() {
             try {
                 updateConnectionStatus('connecting');
-                showDebugInfo('开始初始化 LeanCloud...');
+                console.log('开始初始化 LeanCloud...');
                 
                 // 检查配置
                 if (!LEANCLOUD_CONFIG.appId || LEANCLOUD_CONFIG.appId.includes('YOUR_') || 
                     !LEANCLOUD_CONFIG.appKey || LEANCLOUD_CONFIG.appKey.includes('YOUR_')) {
-                    showDebugInfo('配置未设置，请更新 LEANCLOUD_CONFIG');
+                    console.log('配置未设置，请更新 LEANCLOUD_CONFIG');
                     showConfigurationError();
                     return;
                 }
-                
-                showDebugInfo(`App ID: ${LEANCLOUD_CONFIG.appId.substring(0, 8)}...`);
                 
                 // 初始化 LeanCloud
                 AV.init({
@@ -831,7 +802,7 @@
                     serverURL: LEANCLOUD_CONFIG.serverURL || undefined
                 });
                 
-                showDebugInfo('LeanCloud SDK 初始化成功');
+                console.log('LeanCloud SDK 初始化成功');
                 updateConnectionStatus('connected');
                 
                 // 初始化当前用户
@@ -840,7 +811,7 @@
                 // 测试连接
                 const connected = await testConnection();
                 if (!connected) {
-                    showDebugInfo('连接测试失败');
+                    console.log('连接测试失败');
                     return;
                 }
                 
@@ -854,11 +825,10 @@
                 document.getElementById('messageInput').disabled = false;
                 document.getElementById('sendButton').disabled = false;
                 
-                showDebugInfo('聊天室初始化完成，可以开始聊天了');
+                console.log('聊天室初始化完成，可以开始聊天了');
                 
             } catch (error) {
                 console.error('初始化失败:', error);
-                showDebugInfo('初始化失败: ' + error.message);
                 updateConnectionStatus('disconnected');
                 showConnectionError(error.message);
             }
@@ -893,13 +863,13 @@
             document.getElementById('userName').textContent = currentUser.name;
             document.getElementById('userIdText').textContent = `ID: ${currentUser.id.substring(0, 8)}...`;
             
-            showDebugInfo(`用户初始化完成: ${username} (${userId.substring(0, 8)}...)`);
+            console.log(`用户初始化完成: ${username} (${userId.substring(0, 8)}...)`);
         }
         
         // 测试连接
         async function testConnection() {
             try {
-                showDebugInfo('开始连接测试...');
+                console.log('开始连接测试...');
                 
                 // 尝试创建一个测试对象
                 const TestObject = AV.Object.extend('TestConnection');
@@ -908,16 +878,15 @@
                 testObj.set('userId', currentUser.id);
                 
                 const savedObj = await testObj.save();
-                showDebugInfo('连接测试成功，对象ID: ' + savedObj.id);
+                console.log('连接测试成功，对象ID: ' + savedObj.id);
                 
                 // 清理测试对象
                 await savedObj.destroy();
-                showDebugInfo('测试对象清理完成');
+                console.log('测试对象清理完成');
                 
                 return true;
                 
             } catch (error) {
-                showDebugInfo('连接测试失败: ' + error.message);
                 console.error('连接测试失败:', error);
                 return false;
             }
@@ -926,14 +895,14 @@
         // 加载历史消息
         async function loadHistoricalMessages() {
             try {
-                showDebugInfo('开始加载历史消息...');
+                console.log('开始加载历史消息...');
                 
                 const query = new AV.Query('ChatMessage');
                 query.descending('createdAt');
                 query.limit(50);
                 
                 const messages = await query.find();
-                showDebugInfo(`成功加载 ${messages.length} 条历史消息`);
+                console.log(`成功加载 ${messages.length} 条历史消息`);
                 
                 const messagesContainer = document.getElementById('messagesContainer');
                 messagesContainer.innerHTML = '';
@@ -961,12 +930,11 @@
                 
                 // 滚动到底部
                 setTimeout(() => {
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                    scrollToBottom();
                 }, 100);
                 
             } catch (error) {
                 console.error('加载历史消息失败:', error);
-                showDebugInfo('加载历史消息失败: ' + error.message);
                 showEmptyChatState();
             }
         }
@@ -982,7 +950,7 @@
                 // 禁用发送按钮防止重复发送
                 document.getElementById('sendButton').disabled = true;
                 
-                showDebugInfo(`正在发送消息: "${messageText.substring(0, 20)}..."`);
+                console.log(`正在发送消息: "${messageText.substring(0, 20)}..."`);
                 
                 // 创建消息对象
                 const ChatMessage = AV.Object.extend('ChatMessage');
@@ -995,7 +963,7 @@
                 // 保存到 LeanCloud
                 const savedMessage = await message.save();
                 
-                showDebugInfo(`消息发送成功，ID: ${savedMessage.id}`);
+                console.log(`消息发送成功，ID: ${savedMessage.id}`);
                 
                 // 立即显示消息（不用等轮询）
                 addMessageToChat({
@@ -1018,7 +986,6 @@
                 
             } catch (error) {
                 console.error('发送消息失败:', error);
-                showDebugInfo('发送消息失败: ' + error.message);
                 alert('发送消息失败，请重试');
             } finally {
                 // 重新启用发送按钮
@@ -1037,7 +1004,7 @@
             // 然后定时检查
             pollingInterval = setInterval(checkForNewMessages, POLL_INTERVAL);
             
-            showDebugInfo(`开始轮询新消息，间隔: ${POLL_INTERVAL}ms`);
+            console.log(`开始轮询新消息，间隔: ${POLL_INTERVAL}ms`);
         }
         
         async function checkForNewMessages() {
@@ -1049,7 +1016,7 @@
                 const newMessages = await query.find();
                 
                 if (newMessages.length > 0) {
-                    showDebugInfo(`发现 ${newMessages.length} 条新消息`);
+                    console.log(`发现 ${newMessages.length} 条新消息`);
                     
                     newMessages.forEach(message => {
                         // 避免显示自己刚发的消息（已经即时显示了）
@@ -1076,13 +1043,18 @@
                 
             } catch (error) {
                 console.error('检查新消息失败:', error);
-                showDebugInfo('检查新消息失败: ' + error.message);
             }
         }
         
         // 将消息添加到聊天界面
         function addMessageToChat(message, scrollToBottom = true) {
             const messagesContainer = document.getElementById('messagesContainer');
+            
+            // 如果容器还在显示加载状态，清除加载状态
+            if (messagesContainer.querySelector('.loading')) {
+                messagesContainer.innerHTML = '';
+                hideEmptyChatState();
+            }
             
             // 创建消息元素
             const messageElement = document.createElement('div');
@@ -1104,36 +1076,18 @@
             
             // 滚动到底部
             if (scrollToBottom) {
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                setTimeout(() => {
+                    scrollToBottom();
+                }, 50);
             }
         }
         
-        // 显示/隐藏调试信息
-        function showDebugInfo(text) {
-            const debugInfo = document.getElementById('debugInfo');
-            const debugContent = document.getElementById('debugContent');
-            
-            // 显示调试面板
-            debugInfo.style.display = 'block';
-            
-            // 添加时间戳
-            const time = new Date().toLocaleTimeString();
-            const logEntry = document.createElement('div');
-            logEntry.style.cssText = 'margin: 2px 0; padding: 2px 0; border-bottom: 1px solid #eee;';
-            logEntry.textContent = `[${time}] ${text}`;
-            
-            debugContent.appendChild(logEntry);
-            
-            // 限制日志数量
-            const logs = debugContent.children;
-            if (logs.length > 20) {
-                debugContent.removeChild(logs[0]);
+        // 滚动到底部
+        function scrollToBottom() {
+            const messagesContainer = document.getElementById('messagesContainer');
+            if (messagesContainer) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
             }
-            
-            // 滚动到底部
-            debugInfo.scrollTop = debugInfo.scrollHeight;
-            
-            console.log(text);
         }
         
         // 显示配置错误
@@ -1194,6 +1148,10 @@ const LEANCLOUD_CONFIG = {
         // 显示空聊天状态
         function showEmptyChatState() {
             const messagesContainer = document.getElementById('messagesContainer');
+            if (messagesContainer.querySelector('.loading')) {
+                messagesContainer.innerHTML = '';
+            }
+            
             messagesContainer.innerHTML = `
                 <div class="empty-chat" id="emptyChatState">
                     <i class="fas fa-comments"></i>
