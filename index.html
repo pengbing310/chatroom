@@ -361,18 +361,40 @@
             }
         }
         
-        /* 调试信息 - 仅开发时显示 */
-        .debug-info {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.7);
-            color: white;
-            padding: 8px 12px;
+        /* 配置帮助 */
+        .config-help {
+            background: #f8f9fa;
+            border: 2px dashed var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px;
+            text-align: left;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        .config-help h3 {
+            color: var(--primary-color);
+            margin-top: 0;
+        }
+        
+        .config-help ol {
+            padding-left: 20px;
+            margin: 15px 0;
+        }
+        
+        .config-help li {
+            margin-bottom: 10px;
+            line-height: 1.5;
+        }
+        
+        .config-help code {
+            background: #e9ecef;
+            padding: 2px 6px;
             border-radius: 4px;
-            font-size: 12px;
-            z-index: 1000;
-            max-width: 200px;
+            font-family: monospace;
+            font-size: 14px;
         }
     </style>
 </head>
@@ -458,16 +480,12 @@
         // 最后消息时间
         let lastMessageTime = null;
         let pollingInterval = null;
+        let retryCount = 0;
+        const MAX_RETRY_COUNT = 3;
         
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
             console.log('页面加载完成，开始初始化...');
-            console.log('设备信息:', {
-                userAgent: navigator.userAgent,
-                platform: navigator.platform,
-                width: window.innerWidth,
-                height: window.innerHeight
-            });
             
             // 绑定事件
             document.getElementById('mobileToggle').addEventListener('click', function() {
@@ -533,6 +551,9 @@
                     startPolling();
                     
                     console.log('应用初始化完成');
+                    
+                    // 重置重试计数
+                    retryCount = 0;
                 } else {
                     throw new Error('无法连接到服务器');
                 }
@@ -596,7 +617,14 @@
                 } catch (queryError) {
                     console.log('查询失败，尝试创建表...', queryError.message);
                     
-                    // 如果查询失败，尝试创建一条消息
+                    // 检查是否是401错误（安全域名问题）
+                    if (queryError.message.includes('401') || queryError.message.includes('Unauthorized')) {
+                        console.log('检测到401错误，可能是安全域名配置问题');
+                        // 返回false，让上层处理错误
+                        return false;
+                    }
+                    
+                    // 其他错误，尝试创建一条消息
                     updateLoadingText('正在初始化数据库...');
                     const message = new ChatMessage();
                     message.set('content', '系统：聊天室已创建');
@@ -622,50 +650,90 @@
             
             console.log('处理错误，是否为移动端:', isMobile, '错误信息:', error.message);
             
+            // 增加重试计数
+            retryCount++;
+            
             if (isMobile) {
                 // 移动端显示简单错误信息
-                messagesContainer.innerHTML = `
-                    <div class="error">
-                        <h3>连接失败</h3>
-                        <p>无法连接到聊天服务器</p>
-                        <p style="font-size: 14px; margin-top: 10px;">请检查：</p>
-                        <ol style="text-align: left; margin: 10px auto; max-width: 300px; font-size: 14px;">
-                            <li>网络连接是否正常</li>
-                            <li>是否使用Wi-Fi</li>
-                            <li>服务器可能正在维护</li>
-                        </ol>
-                        <div style="margin-top: 20px;">
-                            <button onclick="retryConnection()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
-                                重试连接
-                            </button>
-                            <button onclick="location.reload()" style="padding: 10px 20px; background-color: var(--secondary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                                刷新页面
-                            </button>
+                if (retryCount < MAX_RETRY_COUNT) {
+                    // 显示重试信息
+                    messagesContainer.innerHTML = `
+                        <div class="error">
+                            <h3>连接失败</h3>
+                            <p>无法连接到聊天服务器 (尝试 ${retryCount}/${MAX_RETRY_COUNT})</p>
+                            <div style="margin-top: 20px;">
+                                <button onclick="retryConnection()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+                                    重试连接
+                                </button>
+                                <button onclick="location.reload()" style="padding: 10px 20px; background-color: var(--secondary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                    刷新页面
+                                </button>
+                            </div>
                         </div>
-                        <div style="margin-top: 20px; font-size: 12px; color: #888;">
-                            <p>如果问题持续存在，请使用电脑访问</p>
+                    `;
+                } else {
+                    // 达到最大重试次数，显示配置帮助
+                    messagesContainer.innerHTML = `
+                        <div class="error">
+                            <h3>连接失败</h3>
+                            <p>多次尝试连接失败</p>
+                            <div class="config-help">
+                                <h3>📱 手机端连接问题解决方案：</h3>
+                                <p>需要在LeanCloud控制台配置安全域名：</p>
+                                <ol>
+                                    <li>访问 <a href="https://console.leancloud.app/" target="_blank" style="color: var(--primary-color);">LeanCloud控制台</a></li>
+                                    <li>选择您的应用</li>
+                                    <li>进入「设置」-「安全中心」</li>
+                                    <li>在「Web安全域名」中添加：</li>
+                                    <div style="background: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 5px;">
+                                        <code>localhost</code><br>
+                                        <code>127.0.0.1</code><br>
+                                        <code>您手机的IP地址</code>
+                                    </div>
+                                    <li><strong>重要：</strong> 添加 <code>*</code> （星号）允许所有域名访问</li>
+                                    <li>点击「保存」</li>
+                                    <li>刷新本页面</li>
+                                </ol>
+                                <p style="color: var(--danger-color); font-weight: bold;">⚠️ 注意：允许所有域名（*）仅限测试环境使用，生产环境请指定具体域名！</p>
+                            </div>
+                            <div style="margin-top: 20px;">
+                                <button onclick="location.reload()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                    刷新页面
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             } else {
                 // 电脑端显示详细错误信息
                 messagesContainer.innerHTML = `
                     <div class="error">
                         <h3>连接失败</h3>
                         <p>${error.message}</p>
-                        <div style="background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 12px;">
-                            <strong>当前访问地址：</strong><br>
-                            ${window.location.origin}
-                        </div>
-                        <p>请在LeanCloud控制台的「设置」-「安全中心」中添加以下域名：</p>
-                        <div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; font-family: monospace; font-size: 14px;">
-                            ${window.location.origin}<br>
-                            localhost<br>
-                            127.0.0.1
+                        <div class="config-help">
+                            <h3>💻 电脑端连接问题解决方案：</h3>
+                            <p>需要在LeanCloud控制台配置安全域名：</p>
+                            <ol>
+                                <li>访问 <a href="https://console.leancloud.app/" target="_blank" style="color: var(--primary-color);">LeanCloud控制台</a></li>
+                                <li>选择您的应用</li>
+                                <li>进入「设置」-「安全中心」</li>
+                                <li>在「Web安全域名」中添加以下域名：</li>
+                                <div style="background: #fff3cd; padding: 10px; margin: 10px 0; border-radius: 5px; font-family: monospace;">
+                                    localhost<br>
+                                    127.0.0.1<br>
+                                    ${window.location.hostname}
+                                </div>
+                                <li><strong>重要：</strong> 添加 <code>*</code> （星号）允许所有域名访问（仅测试环境）</li>
+                                <li>点击「保存」</li>
+                                <li>刷新本页面</li>
+                            </ol>
+                            <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                                <strong>提示：</strong> 如果手机和电脑在同一网络，手机需要访问电脑的IP地址，例如：<code>http://192.168.x.xxx:端口号</code>
+                            </p>
                         </div>
                         <div style="margin-top: 20px;">
                             <button onclick="location.reload()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                                重新加载
+                                刷新页面
                             </button>
                         </div>
                     </div>
@@ -675,11 +743,11 @@
         
         // 重试连接
         function retryConnection() {
-            console.log('重试连接...');
+            console.log('重试连接...', retryCount);
             document.getElementById('messages').innerHTML = `
                 <div class="loading">
                     <div class="spinner"></div>
-                    <div>正在重试连接...</div>
+                    <div>正在重试连接 (${retryCount + 1}/${MAX_RETRY_COUNT})...</div>
                 </div>
             `;
             initApp();
