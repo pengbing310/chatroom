@@ -3,8 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>匿名聊天室</title>
+    <title>实时匿名聊天室</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- LeanCloud SDK -->
+    <script src="https://cdn.jsdelivr.net/npm/leancloud-storage@4.13.2/dist/av-min.js"></script>
+    <!-- 实时通信插件 -->
+    <script src="https://cdn.jsdelivr.net/npm/leancloud-realtime@5.0.0-rc.8/plugins/typed-messages/dist/typed-messages.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/leancloud-realtime@5.0.0-rc.8/plugins/live-query/dist/live-query.min.js"></script>
     <style>
         /* 全局样式 */
         :root {
@@ -48,7 +53,6 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            flex-shrink: 0;
         }
         
         .sidebar-header {
@@ -144,6 +148,11 @@
             background-color: #f0f8ff;
         }
         
+        .user-list li.inactive {
+            border-left-color: #95a5a6;
+            opacity: 0.7;
+        }
+        
         .user-status {
             display: inline-block;
             width: 10px;
@@ -152,6 +161,10 @@
             background-color: var(--secondary-color);
             margin-right: 12px;
             flex-shrink: 0;
+        }
+        
+        .user-status.inactive {
+            background-color: #95a5a6;
         }
         
         .language-switcher {
@@ -185,7 +198,7 @@
             display: flex;
             flex-direction: column;
             overflow: hidden;
-            min-width: 0; /* 防止flex布局溢出 */
+            min-width: 0;
         }
         
         .chat-header {
@@ -236,7 +249,7 @@
             overflow-y: auto;
             padding: 20px;
             background-color: #fafafa;
-            -webkit-overflow-scrolling: touch; /* 移动端流畅滚动 */
+            -webkit-overflow-scrolling: touch;
         }
         
         .message {
@@ -244,6 +257,12 @@
             max-width: 85%;
             display: flex;
             flex-direction: column;
+            animation: fadeIn 0.3s ease;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
         
         .message.self {
@@ -310,7 +329,7 @@
             border-radius: 8px;
         }
         
-        /* 输入区域样式 - 优化移动端位置 */
+        /* 输入区域样式 */
         .input-area {
             padding: 15px 20px;
             border-top: 1px solid var(--border-color);
@@ -362,6 +381,11 @@
             margin-right: 8px;
         }
         
+        #sendButton:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        
         /* 空聊天状态 */
         .empty-chat {
             display: flex;
@@ -385,6 +409,28 @@
             max-width: 400px;
         }
         
+        /* 加载状态 */
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
         /* 移动端适配 */
         @media (max-width: 768px) {
             .container {
@@ -397,7 +443,7 @@
                 max-height: 50vh;
                 border-right: none;
                 border-bottom: 1px solid var(--border-color);
-                position: absolute;
+                position: fixed;
                 top: 0;
                 left: 0;
                 z-index: 100;
@@ -465,8 +511,8 @@
             
             .messages-container {
                 padding: 15px;
-                padding-bottom: 80px; /* 为输入框留出空间 */
-                padding-top: 70px; /* 为头部留出空间 */
+                padding-bottom: 80px;
+                padding-top: 70px;
             }
             
             .empty-chat {
@@ -563,7 +609,7 @@
             }
             
             .chat-header {
-                padding-left: 60px; /* 为切换按钮留出空间 */
+                padding-left: 60px;
             }
         }
         
@@ -603,7 +649,7 @@
         <!-- 侧边栏：在线用户列表 -->
         <div class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <h1 id="chatroomTitle">匿名聊天室</h1>
+                <h1 id="chatroomTitle">实时匿名聊天室</h1>
                 <p id="welcomeText">欢迎！请勿透露个人信息</p>
             </div>
             
@@ -611,19 +657,21 @@
                 <div class="user-avatar" id="userAvatar">甲</div>
                 <div>
                     <div class="user-name" id="userName">甲</div>
-                    <div id="userIdText">匿名用户</div>
+                    <div id="userIdText">连接中...</div>
                 </div>
             </div>
             
             <div class="warning-box">
                 <i class="fas fa-exclamation-triangle"></i>
-                <span id="warningText">匿名聊天室，关闭页面后所有聊天记录将被清除</span>
+                <span id="warningText">匿名聊天室，请勿透露任何个人信息</span>
             </div>
             
             <div class="online-users">
-                <h3 id="onlineUsersTitle">在线用户 (<span id="onlineCount">1</span>)</h3>
+                <h3 id="onlineUsersTitle">在线用户 (<span id="onlineCount">0</span>)</h3>
                 <ul class="user-list" id="userList">
-                    <!-- 用户列表将通过JavaScript动态生成 -->
+                    <div class="loading">
+                        <div class="spinner"></div>
+                    </div>
                 </ul>
             </div>
             
@@ -638,23 +686,21 @@
             <div class="chat-header">
                 <div class="chat-title" id="chatTitle">公共聊天室</div>
                 <div class="connection-status">
-                    <span class="status-dot connected" id="statusDot"></span>
-                    <span id="statusText">在线</span>
+                    <span class="status-dot disconnected" id="statusDot"></span>
+                    <span id="statusText">连接中...</span>
                 </div>
             </div>
             
             <div class="messages-container" id="messagesContainer">
-                <!-- 消息将通过JavaScript动态生成 -->
-                <div class="empty-chat" id="emptyChatState">
-                    <i class="fas fa-comments"></i>
-                    <p id="emptyChatText">还没有消息，发送第一条消息开始聊天吧！</p>
+                <div class="loading">
+                    <div class="spinner"></div>
                 </div>
             </div>
             
             <!-- 输入区域 -->
             <div class="input-area">
-                <input type="text" id="messageInput" placeholder="输入消息..." maxlength="500" autocomplete="off">
-                <button id="sendButton">
+                <input type="text" id="messageInput" placeholder="输入消息..." maxlength="500" autocomplete="off" disabled>
+                <button id="sendButton" disabled>
                     <i class="fas fa-paper-plane"></i>
                     <span id="sendText">发送</span>
                 </button>
@@ -671,28 +717,42 @@
         // 语言配置
         const translations = {
             zh: {
-                title: "匿名聊天室",
+                title: "实时匿名聊天室",
                 welcome: "欢迎！请勿透露个人信息",
-                warning: "匿名聊天室，关闭页面后所有聊天记录将被清除",
+                warning: "匿名聊天室，请勿透露任何个人信息",
                 onlineUsers: "在线用户",
                 placeholder: "输入消息...",
                 send: "发送",
                 emptyChat: "还没有消息，发送第一条消息开始聊天吧！",
-                connected: "在线",
+                connected: "已连接",
+                disconnected: "连接中...",
+                connecting: "正在连接...",
                 you: " (你)",
-                chatTitle: "公共聊天室"
+                chatTitle: "公共聊天室",
+                newUserJoined: "新用户加入了聊天",
+                userLeft: "用户离开了聊天",
+                typing: "正在输入...",
+                connectionError: "连接失败，请刷新页面重试",
+                configError: "需要配置 LeanCloud"
             },
             en: {
-                title: "Anonymous Chat Room",
+                title: "Real-time Anonymous Chat",
                 welcome: "Welcome! Do not share personal information",
-                warning: "Anonymous chat room, all chat records will be cleared when you close the page",
+                warning: "Anonymous chat room, do not share any personal information",
                 onlineUsers: "Online Users",
                 placeholder: "Type a message...",
                 send: "Send",
                 emptyChat: "No messages yet. Send the first message to start chatting!",
-                connected: "Online",
+                connected: "Connected",
+                disconnected: "Connecting...",
+                connecting: "Connecting...",
                 you: " (you)",
-                chatTitle: "Public Chat Room"
+                chatTitle: "Public Chat Room",
+                newUserJoined: "New user joined the chat",
+                userLeft: "User left the chat",
+                typing: "is typing...",
+                connectionError: "Connection failed, please refresh the page",
+                configError: "Need to configure LeanCloud"
             }
         };
         
@@ -707,20 +767,22 @@
             id: null,
             name: null,
             avatar: null,
-            color: null
+            clientId: null
         };
         
-        // 真实在线用户列表（仅当前标签页用户）
-        let onlineUsers = [];
+        // LeanCloud 配置
+        const LEANCLOUD_CONFIG = {
+            appId: 'x1C7t7inH9TDv1Ku9msDyOWi-MdYXbMMI',
+            appKey: 'KLfByl3kEn1BSfhqgu3WWjDk'
+                    };
         
-        // 聊天消息历史
-        let chatHistory = [];
+        // 全局变量
+        let realtime = null;
+        let conversation = null;
+        let onlineUsers = new Map();
         
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
-            // 初始化当前用户
-            initCurrentUser();
-            
             // 初始化界面
             updateUIForLanguage();
             
@@ -739,97 +801,439 @@
             // 移动端侧边栏切换
             document.getElementById('mobileToggle').addEventListener('click', toggleSidebar);
             
-            // 页面关闭时清除数据
-            window.addEventListener('beforeunload', function() {
-                // 清除所有会话数据
-                sessionStorage.removeItem('anonymousChatData');
-            });
+            // 初始化 LeanCloud
+            initializeLeanCloud();
             
-            // 调整输入框位置，防止被键盘遮挡（移动端）
+            // 调整输入框位置
             adjustInputPositionForMobile();
-            
-            // 监听窗口大小变化
             window.addEventListener('resize', adjustInputPositionForMobile);
             
-            // 监听虚拟键盘显示/隐藏
-            window.addEventListener('orientationchange', adjustInputPositionForMobile);
+            // 页面关闭时清理
+            window.addEventListener('beforeunload', cleanupOnExit);
         });
         
+        // 初始化 LeanCloud
+        async function initializeLeanCloud() {
+            try {
+                updateConnectionStatus('connecting');
+                
+                // 检查配置
+                if (LEANCLOUD_CONFIG.appId.includes('YOUR_APP_ID')) {
+                    showConfigurationError();
+                    return;
+                }
+                
+                // 初始化 LeanCloud
+                AV.init({
+                    appId: LEANCLOUD_CONFIG.appId,
+                    appKey: LEANCLOUD_CONFIG.appKey,
+                    serverURL: LEANCLOUD_CONFIG.serverURL || undefined
+                });
+                
+                // 初始化当前用户
+                await initCurrentUser();
+                
+                // 初始化实时通信
+                await initRealtime();
+                
+                // 加载历史消息
+                await loadHistoricalMessages();
+                
+                updateConnectionStatus('connected');
+                
+                // 启用输入框
+                document.getElementById('messageInput').disabled = false;
+                document.getElementById('sendButton').disabled = false;
+                
+            } catch (error) {
+                console.error('初始化失败:', error);
+                updateConnectionStatus('disconnected');
+                showConnectionError();
+            }
+        }
+        
+        // 显示配置错误
+        function showConfigurationError() {
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.innerHTML = `
+                <div class="empty-chat">
+                    <i class="fas fa-cog"></i>
+                    <h3>需要配置 LeanCloud</h3>
+                    <p>请按照以下步骤配置聊天室：</p>
+                    <ol style="text-align: left; margin: 15px 0; max-width: 500px;">
+                        <li>访问 <a href="https://leancloud.app/" target="_blank">leancloud.app</a> 注册账户</li>
+                        <li>创建一个新应用（选择国际版）</li>
+                        <li>进入应用设置 → 应用凭证</li>
+                        <li>复制 App ID 和 App Key</li>
+                        <li>替换代码中的 LEANCLOUD_CONFIG 配置</li>
+                        <li>在存储中创建两个 Class：
+                            <ul>
+                                <li><code>ChatMessage</code>（用于存储消息）</li>
+                                <li><code>OnlineUser</code>（用于存储在线用户）</li>
+                            </ul>
+                        </li>
+                    </ol>
+                    <div style="margin-top: 20px;">
+                        <button onclick="showConfigForm()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                            我已配置，填入信息
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 显示配置表单
+        function showConfigForm() {
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.innerHTML = `
+                <div class="empty-chat">
+                    <i class="fas fa-cog"></i>
+                    <h3>配置 LeanCloud</h3>
+                    <div style="max-width: 500px; margin: 20px auto;">
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">App ID:</label>
+                            <input type="text" id="configAppId" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px;" placeholder="请输入 App ID">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">App Key:</label>
+                            <input type="text" id="configAppKey" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px;" placeholder="请输入 App Key">
+                        </div>
+                        <div style="margin-bottom: 15px;">
+                            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Server URL (可选):</label>
+                            <input type="text" id="configServerURL" style="width: 100%; padding: 10px; border: 1px solid var(--border-color); border-radius: 5px;" placeholder="https://your-domain.example.com">
+                        </div>
+                        <button onclick="saveConfig()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer; width: 100%;">
+                            保存配置并重新连接
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 保存配置
+        function saveConfig() {
+            const appId = document.getElementById('configAppId').value.trim();
+            const appKey = document.getElementById('configAppKey').value.trim();
+            const serverURL = document.getElementById('configServerURL').value.trim();
+            
+            if (!appId || !appKey) {
+                alert('请填写 App ID 和 App Key');
+                return;
+            }
+            
+            // 保存到 localStorage
+            localStorage.setItem('leancloudConfig', JSON.stringify({
+                appId,
+                appKey,
+                serverURL: serverURL || undefined
+            }));
+            
+            // 重新加载页面
+            location.reload();
+        }
+        
+        // 显示连接错误
+        function showConnectionError() {
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.innerHTML = `
+                <div class="empty-chat">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <h3>${translations[currentLang].connectionError}</h3>
+                    <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                        重新加载页面
+                    </button>
+                </div>
+            `;
+        }
+        
         // 初始化当前用户
-        function initCurrentUser() {
-            // 生成唯一用户ID（基于时间戳和随机数）
-            const userId = 'user_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+        async function initCurrentUser() {
+            // 生成或获取用户ID
+            let userId = localStorage.getItem('anonymousChatUserId');
+            if (!userId) {
+                userId = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('anonymousChatUserId', userId);
+            }
             
-            // 从可用用户名中随机选择一个
-            const usernameIndex = Math.floor(Math.random() * availableUsernames.length);
-            const username = availableUsernames[usernameIndex];
+            // 获取或分配用户名
+            let username = localStorage.getItem('anonymousChatUsername');
+            if (!username) {
+                const usernameIndex = Math.floor(Math.random() * availableUsernames.length);
+                username = availableUsernames[usernameIndex];
+                localStorage.setItem('anonymousChatUsername', username);
+            }
             
-            // 生成随机颜色
-            const colors = ['#3498db', '#2ecc71', '#9b59b6', '#e74c3c', '#f39c12', '#1abc9c', '#d35400', '#16a085'];
-            const color = colors[Math.floor(Math.random() * colors.length)];
+            // 生成客户端ID（用于实时通信）
+            const clientId = 'client_' + userId;
             
             // 设置用户信息
             currentUser = {
                 id: userId,
                 name: username,
                 avatar: username.charAt(0),
-                color: color,
-                joinTime: Date.now(),
-                isRealUser: true
+                clientId: clientId
             };
-            
-            // 将当前用户添加到在线列表
-            onlineUsers.push(currentUser);
             
             // 更新用户界面
             document.getElementById('userAvatar').textContent = currentUser.avatar;
             document.getElementById('userName').textContent = currentUser.name;
-            document.getElementById('userIdText').textContent = `匿名用户`;
+            document.getElementById('userIdText').textContent = `ID: ${currentUser.id.substring(0, 8)}...`;
             
-            // 更新用户列表显示
-            updateUserList();
+            // 注册用户为在线状态
+            await registerUserAsOnline();
         }
         
-        // 发送消息
-        function sendMessage() {
-            const messageInput = document.getElementById('messageInput');
-            const messageText = messageInput.value.trim();
-            
-            if (messageText === '') return;
-            
-            // 创建消息对象
-            const message = {
-                id: Date.now().toString(),
-                sender: currentUser,
-                content: messageText,
-                timestamp: Date.now(),
-                time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-                isSystem: false
-            };
-            
-            // 添加到聊天历史
-            chatHistory.push(message);
-            
-            // 显示消息
-            addMessageToChat(message);
-            
-            // 清空输入框
-            messageInput.value = '';
-            messageInput.focus();
-            
-            // 隐藏空聊天状态
-            hideEmptyChatState();
-            
-            // 在移动端发送消息后，确保输入框可见
-            if (window.innerWidth <= 768) {
-                setTimeout(() => {
-                    messageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }, 100);
+        // 注册用户为在线状态
+        async function registerUserAsOnline() {
+            try {
+                const OnlineUser = AV.Object.extend('OnlineUser');
+                const onlineUser = new OnlineUser();
+                
+                // 设置用户信息
+                onlineUser.set('userId', currentUser.id);
+                onlineUser.set('username', currentUser.name);
+                onlineUser.set('clientId', currentUser.clientId);
+                onlineUser.set('lastActive', new Date());
+                
+                // 保存到 LeanCloud
+                await onlineUser.save();
+                
+                // 添加到本地在线用户列表
+                onlineUsers.set(currentUser.id, {
+                    id: currentUser.id,
+                    name: currentUser.name,
+                    clientId: currentUser.clientId,
+                    lastActive: new Date()
+                });
+                
+                // 更新在线用户列表
+                updateUserListUI();
+                
+            } catch (error) {
+                console.error('注册在线用户失败:', error);
             }
         }
         
+        // 初始化实时通信
+        async function initRealtime() {
+            try {
+                // 创建实时通信实例
+                realtime = new AV.Realtime({
+                    appId: LEANCLOUD_CONFIG.appId,
+                    appKey: LEANCLOUD_CONFIG.appKey,
+                    server: LEANCLOUD_CONFIG.serverURL || undefined
+                });
+                
+                // 创建客户端
+                const client = await realtime.createIMClient(currentUser.clientId);
+                
+                // 创建或获取对话（聊天室）
+                conversation = await client.createConversation({
+                    name: '匿名聊天室',
+                    transient: true // 临时对话，不保存到服务器
+                });
+                
+                // 订阅消息
+                conversation.on('message', (message) => {
+                    // 避免重复显示自己的消息
+                    if (message.from !== currentUser.clientId) {
+                        const messageData = message._lctext || message.text;
+                        addMessageToChat({
+                            id: message.id,
+                            sender: {
+                                id: message.from,
+                                name: getUsernameFromClientId(message.from) || '未知用户'
+                            },
+                            content: messageData,
+                            timestamp: new Date(message.timestamp),
+                            time: new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                        });
+                    }
+                });
+                
+                // 订阅成员变化
+                conversation.on('membersjoined', (members, byClientId) => {
+                    members.forEach(memberId => {
+                        if (memberId !== currentUser.clientId) {
+                            addSystemMessage(`用户 ${getUsernameFromClientId(memberId) || '新用户'} 加入了聊天`);
+                        }
+                    });
+                });
+                
+                // 定期更新在线用户
+                setInterval(updateOnlineUsers, 30000);
+                
+            } catch (error) {
+                console.error('初始化实时通信失败:', error);
+                throw error;
+            }
+        }
+        
+        // 加载历史消息
+        async function loadHistoricalMessages() {
+            try {
+                // 查询最近50条消息
+                const query = new AV.Query('ChatMessage');
+                query.descending('createdAt');
+                query.limit(50);
+                
+                const messages = await query.find();
+                
+                const messagesContainer = document.getElementById('messagesContainer');
+                messagesContainer.innerHTML = '';
+                
+                if (messages.length === 0) {
+                    showEmptyChatState();
+                    return;
+                }
+                
+                hideEmptyChatState();
+                
+                // 按时间正序显示
+                messages.reverse().forEach(message => {
+                    addMessageToChat({
+                        id: message.id,
+                        sender: {
+                            id: message.get('userId'),
+                            name: message.get('username')
+                        },
+                        content: message.get('content'),
+                        timestamp: message.createdAt,
+                        time: message.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                    }, false);
+                });
+                
+                // 滚动到底部
+                setTimeout(() => {
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+                }, 100);
+                
+            } catch (error) {
+                console.error('加载历史消息失败:', error);
+                showEmptyChatState();
+            }
+        }
+        
+        // 发送消息
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const messageText = messageInput.value.trim();
+            
+            if (!messageText || !conversation || !currentUser.id) return;
+            
+            try {
+                // 禁用发送按钮防止重复发送
+                document.getElementById('sendButton').disabled = true;
+                
+                // 发送实时消息
+                await conversation.send(new AV.TextMessage(messageText));
+                
+                // 同时保存到数据库（用于历史记录）
+                const ChatMessage = AV.Object.extend('ChatMessage');
+                const chatMessage = new ChatMessage();
+                
+                chatMessage.set('userId', currentUser.id);
+                chatMessage.set('username', currentUser.name);
+                chatMessage.set('content', messageText);
+                chatMessage.set('clientId', currentUser.clientId);
+                
+                await chatMessage.save();
+                
+                // 更新用户活跃状态
+                await updateUserActivity();
+                
+                // 显示自己的消息（实时通信会返回，但我们需要立即显示）
+                addMessageToChat({
+                    id: Date.now().toString(),
+                    sender: {
+                        id: currentUser.id,
+                        name: currentUser.name
+                    },
+                    content: messageText,
+                    timestamp: new Date(),
+                    time: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                });
+                
+                // 清空输入框
+                messageInput.value = '';
+                messageInput.focus();
+                
+                // 隐藏空聊天状态
+                hideEmptyChatState();
+                
+            } catch (error) {
+                console.error('发送消息失败:', error);
+                alert('发送消息失败，请重试');
+            } finally {
+                // 重新启用发送按钮
+                document.getElementById('sendButton').disabled = false;
+            }
+        }
+        
+        // 更新用户活跃状态
+        async function updateUserActivity() {
+            try {
+                // 更新在线用户记录
+                const query = new AV.Query('OnlineUser');
+                query.equalTo('userId', currentUser.id);
+                const result = await query.first();
+                
+                if (result) {
+                    result.set('lastActive', new Date());
+                    await result.save();
+                }
+                
+                // 清理不活跃用户（30秒未活动）
+                const cutoffTime = new Date(Date.now() - 30000);
+                const inactiveQuery = new AV.Query('OnlineUser');
+                inactiveQuery.lessThan('lastActive', cutoffTime);
+                
+                const inactiveUsers = await inactiveQuery.find();
+                await AV.Object.destroyAll(inactiveUsers);
+                
+                // 更新在线用户列表
+                await updateOnlineUsers();
+                
+            } catch (error) {
+                console.error('更新用户活跃状态失败:', error);
+            }
+        }
+        
+        // 更新在线用户
+        async function updateOnlineUsers() {
+            try {
+                const query = new AV.Query('OnlineUser');
+                const users = await query.find();
+                
+                onlineUsers.clear();
+                users.forEach(user => {
+                    onlineUsers.set(user.get('userId'), {
+                        id: user.get('userId'),
+                        name: user.get('username'),
+                        clientId: user.get('clientId'),
+                        lastActive: user.get('lastActive')
+                    });
+                });
+                
+                updateUserListUI();
+                
+            } catch (error) {
+                console.error('更新在线用户失败:', error);
+            }
+        }
+        
+        // 根据clientId获取用户名
+        function getUsernameFromClientId(clientId) {
+            for (let [userId, user] of onlineUsers) {
+                if (user.clientId === clientId) {
+                    return user.name;
+                }
+            }
+            return null;
+        }
+        
         // 将消息添加到聊天界面
-        function addMessageToChat(message) {
+        function addMessageToChat(message, scrollToBottom = true) {
             const messagesContainer = document.getElementById('messagesContainer');
             
             // 创建消息元素
@@ -838,7 +1242,7 @@
             messageElement.className = `message ${isSelf ? 'self' : 'other'}`;
             
             // 格式化时间
-            const time = new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            const time = message.time || new Date(message.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
             
             messageElement.innerHTML = `
                 <div class="message-header">
@@ -851,7 +1255,44 @@
             messagesContainer.appendChild(messageElement);
             
             // 滚动到底部
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            if (scrollToBottom) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+        }
+        
+        // 更新用户列表UI
+        function updateUserListUI() {
+            const userListContainer = document.getElementById('userList');
+            const onlineCount = document.getElementById('onlineCount');
+            
+            // 更新在线人数
+            onlineCount.textContent = onlineUsers.size;
+            
+            // 清空当前列表
+            userListContainer.innerHTML = '';
+            
+            // 添加用户到列表
+            onlineUsers.forEach((user, userId) => {
+                const isCurrentUser = userId === currentUser.id;
+                const isActive = (Date.now() - new Date(user.lastActive).getTime()) < 30000;
+                
+                const userItem = document.createElement('li');
+                userItem.className = `user-list-item ${isCurrentUser ? 'self' : ''} ${!isActive ? 'inactive' : ''}`;
+                
+                userItem.innerHTML = `
+                    <span class="user-status ${!isActive ? 'inactive' : ''}"></span>
+                    <span class="user-name">${user.name}${isCurrentUser ? translations[currentLang].you : ''}</span>
+                `;
+                
+                userListContainer.appendChild(userItem);
+            });
+            
+            // 如果没有其他用户
+            if (onlineUsers.size <= 1) {
+                const emptyItem = document.createElement('li');
+                emptyItem.innerHTML = '<span style="color: #7f8c8d; font-style: italic;">等待其他用户加入...</span>';
+                userListContainer.appendChild(emptyItem);
+            }
         }
         
         // 隐藏空聊天状态
@@ -864,44 +1305,42 @@
         
         // 显示空聊天状态
         function showEmptyChatState() {
-            const emptyChatState = document.getElementById('emptyChatState');
-            if (emptyChatState) {
-                emptyChatState.style.display = 'flex';
-            }
+            const messagesContainer = document.getElementById('messagesContainer');
+            messagesContainer.innerHTML = `
+                <div class="empty-chat" id="emptyChatState">
+                    <i class="fas fa-comments"></i>
+                    <p>${translations[currentLang].emptyChat}</p>
+                </div>
+            `;
         }
         
-        // 更新用户列表
-        function updateUserList() {
-            const userListContainer = document.getElementById('userList');
-            const onlineCount = document.getElementById('onlineCount');
+        // 添加系统消息
+        function addSystemMessage(text) {
+            const messagesContainer = document.getElementById('messagesContainer');
             
-            // 更新在线人数
-            onlineCount.textContent = onlineUsers.length;
+            const systemMessage = document.createElement('div');
+            systemMessage.className = 'system-message';
+            systemMessage.textContent = text;
             
-            // 清空当前列表
-            userListContainer.innerHTML = '';
+            messagesContainer.appendChild(systemMessage);
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        }
+        
+        // 更新连接状态
+        function updateConnectionStatus(status) {
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
             
-            // 如果没有在线用户，显示提示
-            if (onlineUsers.length === 0) {
-                const emptyItem = document.createElement('li');
-                emptyItem.innerHTML = '<span style="color: #7f8c8d; font-style: italic;">暂无其他用户在线</span>';
-                userListContainer.appendChild(emptyItem);
-                return;
+            if (status === 'connected') {
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = translations[currentLang].connected;
+            } else if (status === 'connecting') {
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = translations[currentLang].connecting;
+            } else {
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = translations[currentLang].disconnected;
             }
-            
-            // 添加用户到列表
-            onlineUsers.forEach(user => {
-                const isCurrentUser = user.id === currentUser.id;
-                const userItem = document.createElement('li');
-                userItem.className = isCurrentUser ? 'self' : '';
-                
-                userItem.innerHTML = `
-                    <span class="user-status"></span>
-                    <span class="user-name">${user.name}${isCurrentUser ? translations[currentLang].you : ''}</span>
-                `;
-                
-                userListContainer.appendChild(userItem);
-            });
         }
         
         // 切换语言
@@ -915,8 +1354,8 @@
             // 更新界面文本
             updateUIForLanguage();
             
-            // 更新用户列表（显示"你"的文本）
-            updateUserList();
+            // 更新用户列表
+            updateUserListUI();
         }
         
         // 更新界面文本
@@ -924,10 +1363,9 @@
             document.getElementById('chatroomTitle').textContent = translations[currentLang].title;
             document.getElementById('welcomeText').textContent = translations[currentLang].welcome;
             document.getElementById('warningText').textContent = translations[currentLang].warning;
-            document.getElementById('onlineUsersTitle').innerHTML = `${translations[currentLang].onlineUsers} (<span id="onlineCount">1</span>)`;
+            document.getElementById('onlineUsersTitle').innerHTML = `${translations[currentLang].onlineUsers} (<span id="onlineCount">0</span>)`;
             document.getElementById('messageInput').placeholder = translations[currentLang].placeholder;
             document.getElementById('sendText').textContent = translations[currentLang].send;
-            document.getElementById('emptyChatText').textContent = translations[currentLang].emptyChat;
             document.getElementById('chatTitle').textContent = translations[currentLang].chatTitle;
         }
         
@@ -957,32 +1395,30 @@
             }
         }
         
-        // 调整移动端输入框位置，防止被键盘遮挡
+        // 调整移动端输入框位置
         function adjustInputPositionForMobile() {
             if (window.innerWidth <= 768) {
-                const inputArea = document.querySelector('.input-area');
                 const messagesContainer = document.querySelector('.messages-container');
-                
-                // 默认底部间距
-                let bottomPadding = 80;
-                
-                // 如果屏幕高度较小（可能是键盘弹出），增加底部间距
-                if (window.innerHeight < 500) {
-                    bottomPadding = 120;
-                }
-                
-                // 应用底部间距
                 if (messagesContainer) {
-                    messagesContainer.style.paddingBottom = bottomPadding + 'px';
+                    messagesContainer.style.paddingBottom = '80px';
+                }
+            }
+        }
+        
+        // 页面退出时清理
+        async function cleanupOnExit() {
+            try {
+                // 从在线用户表中删除当前用户
+                const query = new AV.Query('OnlineUser');
+                query.equalTo('userId', currentUser.id);
+                const result = await query.first();
+                
+                if (result) {
+                    await result.destroy();
                 }
                 
-                // 确保输入框在可视区域内
-                setTimeout(() => {
-                    const messageInput = document.getElementById('messageInput');
-                    if (document.activeElement === messageInput) {
-                        messageInput.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                }, 300);
+            } catch (error) {
+                console.error('清理用户状态失败:', error);
             }
         }
         
@@ -992,6 +1428,22 @@
             div.textContent = text;
             return div.innerHTML;
         }
+        
+        // 尝试从localStorage加载配置
+        function loadConfigFromStorage() {
+            try {
+                const savedConfig = localStorage.getItem('leancloudConfig');
+                if (savedConfig) {
+                    const config = JSON.parse(savedConfig);
+                    Object.assign(LEANCLOUD_CONFIG, config);
+                }
+            } catch (error) {
+                console.error('加载配置失败:', error);
+            }
+        }
+        
+        // 页面加载时尝试加载配置
+        loadConfigFromStorage();
     </script>
 </body>
 </html>
