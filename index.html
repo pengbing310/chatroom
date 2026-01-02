@@ -35,6 +35,7 @@
             display: flex;
             height: 100vh;
             width: 100vw;
+            position: relative;
         }
         
         /* 侧边栏 */
@@ -44,6 +45,7 @@
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
+            height: 100%;
         }
         
         .sidebar-header {
@@ -107,6 +109,7 @@
             flex: 1;
             display: flex;
             flex-direction: column;
+            height: 100%;
         }
         
         .chat-header {
@@ -217,9 +220,13 @@
         
         /* 加载和空状态 */
         .loading {
-            text-align: center;
-            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
             color: #7f8c8d;
+            text-align: center;
         }
         
         .spinner {
@@ -229,7 +236,7 @@
             border-top: 4px solid var(--primary-color);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin-bottom: 20px;
         }
         
         @keyframes spin {
@@ -238,21 +245,36 @@
         }
         
         .empty-chat {
-            text-align: center;
-            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
             color: #7f8c8d;
+            text-align: center;
+            padding: 20px;
         }
         
         .error {
-            text-align: center;
-            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
             color: var(--danger-color);
+            text-align: center;
+            padding: 20px;
         }
         
         .success {
-            text-align: center;
-            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
             color: var(--secondary-color);
+            text-align: center;
+            padding: 20px;
         }
         
         /* 移动端适配 */
@@ -263,13 +285,14 @@
             
             .sidebar {
                 width: 100%;
-                height: 50vh;
+                height: 60vh;
                 position: fixed;
                 top: 0;
                 left: 0;
                 transform: translateY(-100%);
                 transition: transform 0.3s ease;
                 z-index: 100;
+                box-shadow: 0 5px 15px rgba(0,0,0,0.1);
             }
             
             .sidebar.active {
@@ -277,6 +300,7 @@
             }
             
             .chat-area {
+                width: 100%;
                 height: 100vh;
             }
             
@@ -284,8 +308,8 @@
                 position: fixed;
                 top: 15px;
                 left: 15px;
-                width: 40px;
-                height: 40px;
+                width: 45px;
+                height: 45px;
                 border-radius: 50%;
                 background-color: var(--primary-color);
                 color: white;
@@ -294,6 +318,40 @@
                 display: flex;
                 align-items: center;
                 justify-content: center;
+                font-size: 18px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            }
+            
+            .chat-header {
+                padding-left: 70px;
+                position: relative;
+                z-index: 1;
+            }
+            
+            .messages {
+                padding: 15px;
+                padding-bottom: 80px;
+                padding-top: 60px;
+            }
+            
+            .input-area {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                background-color: white;
+                z-index: 10;
+                box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+                padding: 12px 15px;
+            }
+            
+            .message {
+                max-width: 85%;
+            }
+            
+            .loading, .error, .success, .empty-chat {
+                padding-top: 60px;
+                padding-bottom: 80px;
             }
         }
         
@@ -301,6 +359,20 @@
             .mobile-toggle {
                 display: none;
             }
+        }
+        
+        /* 调试信息 - 仅开发时显示 */
+        .debug-info {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            z-index: 1000;
+            max-width: 200px;
         }
     </style>
 </head>
@@ -350,8 +422,7 @@
             <div class="messages" id="messages">
                 <div class="loading" id="messagesLoading">
                     <div class="spinner"></div>
-                    <div>正在连接LeanCloud...</div>
-                    <div style="font-size: 12px; margin-top: 10px;" id="connectionDetails"></div>
+                    <div id="loadingText">正在初始化聊天室...</div>
                 </div>
             </div>
             
@@ -371,12 +442,10 @@
     </div>
 
     <script>
-        // 配置 - 使用您提供的配置
+        // 配置
         const CONFIG = {
             appId: 'x1C7t7inH9TDv1Ku9msDyOWi-MdYXbMMI',
             appKey: 'KLfByl3kEn1BSfhqgu3WWjDk'
-            // 对于国内节点，需要指定serverURL
-            
         };
         
         // 当前用户
@@ -388,11 +457,17 @@
         
         // 最后消息时间
         let lastMessageTime = null;
+        let pollingInterval = null;
         
         // 页面加载时初始化
         document.addEventListener('DOMContentLoaded', function() {
             console.log('页面加载完成，开始初始化...');
-            console.log('使用配置:', CONFIG);
+            console.log('设备信息:', {
+                userAgent: navigator.userAgent,
+                platform: navigator.platform,
+                width: window.innerWidth,
+                height: window.innerHeight
+            });
             
             // 绑定事件
             document.getElementById('mobileToggle').addEventListener('click', function() {
@@ -406,10 +481,6 @@
                 }
             });
             
-            // 显示连接详情
-            document.getElementById('connectionDetails').textContent = 
-                `App ID: ${CONFIG.appId.substring(0, 8)}`;
-            
             // 启动应用
             initApp();
         });
@@ -418,14 +489,15 @@
         async function initApp() {
             try {
                 updateStatus('正在初始化...');
+                updateLoadingText('正在初始化聊天室...');
                 
-                // 显示连接详情
-                console.log('初始化LeanCloud，使用配置:', CONFIG);
+                // 显示初始化信息
+                console.log('初始化LeanCloud...');
                 
-                // 初始化LeanCloud - 国内节点必须指定serverURL
+                // 初始化LeanCloud
                 AV.init({
                     appId: CONFIG.appId,
-                    appKey: CONFIG.appKey                
+                    appKey: CONFIG.appKey
                 });
                 
                 console.log('LeanCloud SDK初始化成功');
@@ -433,32 +505,42 @@
                 // 初始化用户
                 await initUser();
                 
-                // 测试连接 - 直接尝试操作ChatMessage表
+                // 测试连接
                 updateStatus('正在连接...');
-                const connected = await testChatMessageConnection();
+                updateLoadingText('正在连接到服务器...');
+                const connected = await testConnection();
                 
                 if (connected) {
                     updateStatus('已连接');
+                    updateLoadingText('连接成功，加载消息中...');
                     
                     // 启用输入框
                     document.getElementById('messageInput').disabled = false;
                     document.getElementById('sendButton').disabled = false;
                     document.getElementById('messageInput').placeholder = "输入消息...";
-                    document.getElementById('messageInput').focus();
+                    
+                    // 电脑端自动聚焦
+                    if (window.innerWidth > 768) {
+                        setTimeout(() => {
+                            document.getElementById('messageInput').focus();
+                        }, 500);
+                    }
                     
                     // 加载数据
                     await loadData();
                     
                     // 开始轮询
                     startPolling();
+                    
+                    console.log('应用初始化完成');
                 } else {
-                    throw new Error('无法连接到LeanCloud服务器');
+                    throw new Error('无法连接到服务器');
                 }
                 
             } catch (error) {
                 console.error('初始化失败:', error);
                 updateStatus('连接失败');
-                showError('初始化失败: ' + error.message);
+                handleInitError(error);
             }
         }
         
@@ -491,109 +573,123 @@
                 document.getElementById('userName').textContent = currentUser.name;
                 document.getElementById('userId').textContent = 'ID: ' + currentUser.id.substring(0, 12) + '...';
                 
-                console.log('用户初始化完成:', currentUser);
+                console.log('用户初始化完成:', currentUser.name);
                 resolve();
             });
         }
         
-        // 测试ChatMessage连接
-        async function testChatMessageConnection() {
+        // 测试连接
+        async function testConnection() {
             try {
-                console.log('测试ChatMessage连接...');
+                console.log('测试LeanCloud连接...');
+                updateLoadingText('测试服务器连接...');
                 
-                // 尝试查询ChatMessage表
+                // 尝试直接查询ChatMessage表
+                const ChatMessage = AV.Object.extend('ChatMessage');
                 const query = new AV.Query('ChatMessage');
                 query.limit(1);
                 
-                const results = await query.find();
-                console.log('ChatMessage查询成功，结果数:', results.length);
-                
-                return true;
+                try {
+                    const results = await query.find();
+                    console.log('连接测试成功，查询到数据:', results.length);
+                    return true;
+                } catch (queryError) {
+                    console.log('查询失败，尝试创建表...', queryError.message);
+                    
+                    // 如果查询失败，尝试创建一条消息
+                    updateLoadingText('正在初始化数据库...');
+                    const message = new ChatMessage();
+                    message.set('content', '系统：聊天室已创建');
+                    message.set('userId', 'system_' + Date.now());
+                    message.set('username', '系统');
+                    
+                    const saved = await message.save();
+                    console.log('ChatMessage表创建成功:', saved.id);
+                    
+                    return true;
+                }
                 
             } catch (error) {
-                console.error('ChatMessage查询失败:', error.message);
-                
-                // 如果是404错误（表不存在），尝试创建一条消息
-                if (error.message.includes('404') || error.message.includes('not found') || error.message.includes('Class')) {
-                    console.log('尝试创建ChatMessage表...');
-                    return await tryCreateChatMessage();
-                }
-                
-                // 如果是401错误，可能是权限问题
-                if (error.message.includes('401') || error.message.includes('Unauthorized')) {
-                    console.error('认证失败！请检查：');
-                    console.error('1. App ID 和 App Key 是否正确');
-                    console.error('2. 是否在LeanCloud控制台添加了Web安全域名');
-                    console.error('3. 当前URL:', window.location.origin);
-                    
-                    // 显示详细错误
-                    document.getElementById('messagesLoading').innerHTML = `
-                        <div class="error">
-                            <h3>认证失败 (401)</h3>
-                            <p>请检查LeanCloud配置：</p>
-                            <ol style="text-align: left; max-width: 500px; margin: 20px auto;">
-                                <li>App ID 和 App Key 是否正确</li>
-                                <li>在LeanCloud控制台是否添加了Web安全域名</li>
-                                <li>当前访问URL: ${window.location.origin}</li>
-                                <li>需要在「设置」-「安全中心」中添加: ${window.location.origin}</li>
-                            </ol>
-                            <div style="background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0;">
-                                <strong>当前配置：</strong><br>
-                                App ID: ${CONFIG.appId}<br>
-                                                            </div>
-                            <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                                重新加载
-                            </button>
-                        </div>
-                    `;
-                }
-                
+                console.error('连接测试失败:', error);
                 return false;
             }
         }
         
-        // 尝试创建ChatMessage
-        async function tryCreateChatMessage() {
-            try {
-                console.log('尝试创建ChatMessage对象...');
-                
-                // 创建一条测试消息
-                const ChatMessage = AV.Object.extend('ChatMessage');
-                const message = new ChatMessage();
-                message.set('content', '系统：聊天室已创建');
-                message.set('userId', 'system');
-                message.set('username', '系统');
-                
-                const saved = await message.save();
-                console.log('ChatMessage创建成功:', saved.id);
-                
-                // 显示成功信息
-                document.getElementById('messagesLoading').innerHTML = `
-                    <div class="success">
-                        <h3>✓ 聊天室创建成功</h3>
-                        <p>已成功创建ChatMessage表</p>
-                        <p>现在可以开始聊天了！</p>
-                    </div>
-                `;
-                
-                return true;
-                
-            } catch (error) {
-                console.error('创建ChatMessage失败:', error.message);
-                
-                // 显示详细错误
-                document.getElementById('messagesLoading').innerHTML = `
+        // 处理初始化错误
+        function handleInitError(error) {
+            const messagesContainer = document.getElementById('messages');
+            const isMobile = window.innerWidth <= 768;
+            
+            console.log('处理错误，是否为移动端:', isMobile, '错误信息:', error.message);
+            
+            if (isMobile) {
+                // 移动端显示简单错误信息
+                messagesContainer.innerHTML = `
                     <div class="error">
-                        <h3>创建ChatMessage表失败</h3>
-                        <p>错误: ${error.message}</p>
-                        <p>请检查LeanCloud控制台权限设置</p>
-                        <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                            重新加载
-                        </button>
+                        <h3>连接失败</h3>
+                        <p>无法连接到聊天服务器</p>
+                        <p style="font-size: 14px; margin-top: 10px;">请检查：</p>
+                        <ol style="text-align: left; margin: 10px auto; max-width: 300px; font-size: 14px;">
+                            <li>网络连接是否正常</li>
+                            <li>是否使用Wi-Fi</li>
+                            <li>服务器可能正在维护</li>
+                        </ol>
+                        <div style="margin-top: 20px;">
+                            <button onclick="retryConnection()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+                                重试连接
+                            </button>
+                            <button onclick="location.reload()" style="padding: 10px 20px; background-color: var(--secondary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                刷新页面
+                            </button>
+                        </div>
+                        <div style="margin-top: 20px; font-size: 12px; color: #888;">
+                            <p>如果问题持续存在，请使用电脑访问</p>
+                        </div>
                     </div>
                 `;
-                
-                return false;
+            } else {
+                // 电脑端显示详细错误信息
+                messagesContainer.innerHTML = `
+                    <div class="error">
+                        <h3>连接失败</h3>
+                        <p>${error.message}</p>
+                        <div style="background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0; font-size: 12px;">
+                            <strong>当前访问地址：</strong><br>
+                            ${window.location.origin}
+                        </div>
+                        <p>请在LeanCloud控制台的「设置」-「安全中心」中添加以下域名：</p>
+                        <div style="background: #fff3cd; padding: 10px; border-radius: 4px; margin: 10px 0; font-family: monospace; font-size: 14px;">
+                            ${window.location.origin}<br>
+                            localhost<br>
+                            127.0.0.1
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <button onclick="location.reload()" style="padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                重新加载
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // 重试连接
+        function retryConnection() {
+            console.log('重试连接...');
+            document.getElementById('messages').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <div>正在重试连接...</div>
+                </div>
+            `;
+            initApp();
+        }
+        
+        // 更新加载文本
+        function updateLoadingText(text) {
+            const loadingText = document.getElementById('loadingText');
+            if (loadingText) {
+                loadingText.textContent = text;
             }
         }
         
@@ -601,6 +697,7 @@
         async function loadData() {
             try {
                 console.log('开始加载数据...');
+                updateLoadingText('正在加载历史消息...');
                 
                 // 加载消息
                 await loadMessages();
@@ -621,7 +718,7 @@
                 
                 const query = new AV.Query('ChatMessage');
                 query.descending('createdAt');
-                query.limit(30);
+                query.limit(50);
                 
                 const messages = await query.find();
                 console.log('获取到消息数量:', messages.length);
@@ -640,15 +737,12 @@
                 lastMessageTime = messages[0].createdAt;
                 
                 // 显示消息（按时间正序）
-                // 反转数组，按时间正序显示
                 messages.reverse().forEach(msg => {
                     addMessageToUI(msg, false);
                 });
                 
                 // 滚动到底部
-                setTimeout(() => {
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                }, 100);
+                scrollToBottom();
                 
             } catch (error) {
                 console.error('加载消息失败:', error);
@@ -698,8 +792,10 @@
                 
             } catch (error) {
                 console.error('加载用户列表失败:', error);
-                document.getElementById('userListLoading').innerHTML = 
-                    '<div class="error">加载用户列表失败</div>';
+                const userListLoading = document.getElementById('userListLoading');
+                if (userListLoading) {
+                    userListLoading.innerHTML = '<div>加载用户列表失败</div>';
+                }
             }
         }
         
@@ -707,9 +803,12 @@
         function updateUserListUI(users) {
             const userList = document.getElementById('userList');
             const onlineCount = document.getElementById('onlineCount');
+            const userListLoading = document.getElementById('userListLoading');
             
             // 隐藏加载状态
-            document.getElementById('userListLoading').style.display = 'none';
+            if (userListLoading) {
+                userListLoading.style.display = 'none';
+            }
             
             // 更新在线人数
             onlineCount.textContent = Object.keys(users).length;
@@ -757,7 +856,11 @@
                 
                 // 清空输入框
                 input.value = '';
-                input.focus();
+                
+                // 电脑端自动聚焦
+                if (window.innerWidth > 768) {
+                    input.focus();
+                }
                 
                 // 更新最后消息时间
                 lastMessageTime = savedMessage.createdAt;
@@ -767,7 +870,7 @@
                 
             } catch (error) {
                 console.error('发送消息失败:', error);
-                alert('发送失败: ' + error.message);
+                alert('发送失败，请检查网络连接');
             } finally {
                 // 重新启用发送按钮
                 document.getElementById('sendButton').disabled = false;
@@ -806,9 +909,7 @@
             messagesContainer.appendChild(messageDiv);
             
             if (scrollToBottom) {
-                setTimeout(() => {
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-                }, 50);
+                setTimeout(scrollToBottom, 50);
             }
         }
         
@@ -843,11 +944,16 @@
         
         // 开始轮询新消息
         function startPolling() {
+            // 清理之前的轮询
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+            }
+            
             // 立即检查一次
             checkNewMessages();
             
-            // 每5秒检查一次
-            setInterval(checkNewMessages, 5000);
+            // 每3秒检查一次
+            pollingInterval = setInterval(checkNewMessages, 3000);
         }
         
         // 检查新消息
@@ -883,31 +989,12 @@
             }
         }
         
-        // 显示错误
-        function showError(message) {
+        // 滚动到底部
+        function scrollToBottom() {
             const messagesContainer = document.getElementById('messages');
-            
-            messagesContainer.innerHTML = `
-                <div class="error">
-                    <h3>连接失败</h3>
-                    <p>${message}</p>
-                    <div style="background: #f5f5f5; padding: 10px; border-radius: 4px; margin: 10px 0;">
-                        <strong>当前配置：</strong><br>
-                        App ID: ${CONFIG.appId}<br>
-                        App Key: ${CONFIG.appKey}<br>                      
-                    </div>
-                    <p>请检查：</p>
-                    <ol style="text-align: left; max-width: 500px; margin: 20px auto;">
-                        <li>App ID 和 App Key 是否正确</li>
-                        <li>在LeanCloud控制台是否添加了Web安全域名</li>
-                        <li>当前访问URL: ${window.location.origin}</li>
-                        <li>需要在「设置」-「安全中心」中添加: ${window.location.origin}</li>
-                    </ol>
-                    <button onclick="location.reload()" style="margin-top: 20px; padding: 10px 20px; background-color: var(--primary-color); color: white; border: none; border-radius: 5px; cursor: pointer;">
-                        重新加载
-                    </button>
-                </div>
-            `;
+            if (messagesContainer) {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
         }
         
         // 更新状态
